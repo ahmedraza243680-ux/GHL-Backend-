@@ -1,0 +1,106 @@
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BusinessStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LocationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PostType {
+  UPDATE
+  OFFER
+  EVENT
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  POSTED
+  PENDING
+  PUBLISHED
+  REJECTED
+  FAILED
+}
+
+model Business {
+  id            String         @id @default(cuid())
+  name          String
+  ghlAccountId  String         @unique
+  status        BusinessStatus @default(ACTIVE)
+  createdAt     DateTime       @default(now())
+  locations     Location[]
+}
+
+model Location {
+  id                 String           @id @default(cuid())
+  businessId         String
+  business           Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ghlLocationId      String           @unique
+  googleLocationId   String?
+  googleAccountId    String?
+  timezone           String           @default("UTC")
+  status             LocationStatus   @default(ACTIVE)
+  requiresApproval   Boolean          @default(false)
+  /// OAuth tokens for Google Business Profile (encrypt at rest in production)
+  googleAccessToken  String?
+  googleRefreshToken String?
+  googleTokenExpiresAt DateTime?
+  createdAt          DateTime         @default(now())
+  posts              Post[]
+  media              Media[]
+  auditLogs          AuditLog[]
+
+  @@index([businessId])
+}
+
+model Media {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  postType   PostType
+  url        String
+  createdAt  DateTime @default(now())
+
+  @@index([locationId, postType])
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  locationId  String
+  location    Location   @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  type        PostType
+  content     String     @db.Text
+  mediaUrl    String?
+  scheduledAt DateTime?
+  postedAt    DateTime?
+  status      PostStatus @default(DRAFT)
+  platform    String     @default("google")
+  createdAt   DateTime   @default(now())
+
+  @@index([locationId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([locationId])
+  @@index([createdAt])
+}
