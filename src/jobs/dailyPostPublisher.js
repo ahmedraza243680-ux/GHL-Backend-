@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import prisma from '../database/client.js';
 import { RETRY_DELAYS_MS, sendFailureAlert, sleep } from '../services/alert.service.js';
+import { generatePostContent } from '../services/contentGenerator.service.js';
 import { publishPostForLocation } from '../services/posts.service.js';
 
 const MAX_RETRIES = 3;
@@ -20,12 +21,6 @@ function inferCategoryLabel(businessName) {
     return 'beauty';
   }
   return 'local business';
-}
-
-export function buildDailyPostContent(businessName, categoryLabel) {
-  const name = businessName.trim() || 'Our business';
-  const cat = categoryLabel.trim() || 'services';
-  return `Good morning from ${name}! Discover today's highlights in ${cat} — quality you can trust. Visit ${name} soon for the latest updates and special attention to your needs.`;
 }
 
 async function safeCreateAuditLog(data) {
@@ -95,11 +90,20 @@ export async function runDailyPostPublisher() {
   let failed = 0;
   /** @type {Array<{ locationId: string; success: boolean; postId?: string; error?: string }>} */
   const results = [];
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000,
+  );
 
   for (const loc of locations) {
     const businessName = loc.business?.name ?? 'Business';
-    const categoryLabel = inferCategoryLabel(businessName);
-    const content = buildDailyPostContent(businessName, categoryLabel);
+    const category = inferCategoryLabel(businessName);
+    const content = await generatePostContent(
+      businessName,
+      category,
+      'New Jersey',
+      'UPDATE',
+      dayOfYear,
+    );
 
     try {
       const post = await publishLocationWithRetries(loc.id, {

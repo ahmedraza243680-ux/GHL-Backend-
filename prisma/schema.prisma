@@ -54,6 +54,9 @@ model Location {
   timezone           String           @default("UTC")
   status             LocationStatus   @default(ACTIVE)
   requiresApproval   Boolean          @default(false)
+  ghlLastPostDateFieldId String?
+  ghlPostStatusFieldId   String?
+  ghlApiKey              String?
   /// OAuth tokens for Google Business Profile (encrypt at rest in production)
   googleAccessToken  String?
   googleRefreshToken String?

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { env } from '../config/env.js';
+import prisma from '../database/client.js';
 import { AppError } from '../utils/AppError.js';
 
 /** GoHighLevel / LeadConnector API version header */
@@ -8,20 +9,48 @@ const GHL_VERSION = '2021-07-28';
 const CUSTOM_FIELD_LAST_POST_DATE = 'Last Post Date';
 const CUSTOM_FIELD_POST_STATUS = 'Post Status';
 
-/**
- * Updates location custom values (two POSTs — one per field name).
- * Custom value names must match what is configured in the GHL location.
- *
- * @param {string} ghlLocationId
- * @param {string | Date} lastPostDate — stored as string in GHL (e.g. ISO)
- * @param {string} postStatus
- */
-export async function updateLocationCustomFields(ghlLocationId, lastPostDate, postStatus) {
-  if (!ghlLocationId || String(ghlLocationId).trim() === '') {
+async function resolveGhlAuth(locationOrGhlLocationId) {
+  if (
+    typeof locationOrGhlLocationId === 'object' &&
+    locationOrGhlLocationId !== null &&
+    locationOrGhlLocationId.ghlLocationId
+  ) {
+    const ghlLocationId = locationOrGhlLocationId.ghlLocationId;
+    const token =
+      locationOrGhlLocationId.ghlApiKey?.trim() || env.GHL_API_KEY?.trim() || '';
+    return { ghlLocationId, token };
+  }
+
+  const ghlLocationId = String(locationOrGhlLocationId ?? '').trim();
+  if (!ghlLocationId) {
     throw new AppError('ghlLocationId is required for GHL custom field updates.', 400, {
       code: 'GHL_LOCATION_ID_MISSING',
     });
   }
+
+  const location = await prisma.location.findUnique({
+    where: { ghlLocationId },
+    select: { ghlLocationId: true, ghlApiKey: true },
+  });
+
+  const token = location?.ghlApiKey?.trim() || env.GHL_API_KEY?.trim() || '';
+  return { ghlLocationId, token };
+}
+
+/**
+ * Updates location custom values (two POSTs — one per field name).
+ * Custom value names must match what is configured in the GHL location.
+ *
+ * @param {string | { ghlLocationId: string, ghlApiKey?: string | null }} locationOrGhlLocationId
+ * @param {string | Date} lastPostDate — stored as string in GHL (e.g. ISO)
+ * @param {string} postStatus
+ */
+export async function updateLocationCustomFields(
+  locationOrGhlLocationId,
+  lastPostDate,
+  postStatus,
+) {
+  const { ghlLocationId, token } = await resolveGhlAuth(locationOrGhlLocationId);
 
   const dateStr =
     lastPostDate instanceof Date ? lastPostDate.toISOString() : String(lastPostDate);
@@ -38,13 +67,11 @@ export async function updateLocationCustomFields(ghlLocationId, lastPostDate, po
     );
     return { success: true, mock: true };
   }
-
-  const token = env.GHL_API_KEY?.trim();
   if (!token) {
     console.warn(
       JSON.stringify({
         event: 'ghl_custom_fields_skipped',
-        reason: 'GHL_API_KEY empty',
+        reason: 'GHL API key empty for location and env',
         ghlLocationId,
       }),
     );

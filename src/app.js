@@ -8,6 +8,7 @@ import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import locationsRoutes from './routes/locations.routes.js';
 import testRoutes from './routes/test.routes.js';
+import setupRoutes from './routes/setup.routes.js';
 
 export function createApp() {
   const app = express();
@@ -25,6 +26,8 @@ export function createApp() {
   if (env.NODE_ENV === 'development') {
     app.use('/test', testRoutes);
   }
+
+  app.use('/setup', setupRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
