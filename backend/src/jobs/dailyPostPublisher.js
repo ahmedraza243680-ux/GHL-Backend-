@@ -2,11 +2,18 @@ import cron from 'node-cron';
 import prisma from '../database/client.js';
 import { RETRY_DELAYS_MS, sendFailureAlert, sleep } from '../services/alert.service.js';
 import { generatePostContent } from '../services/contentGenerator.service.js';
-import { getLocationMediaFallbackUrl } from '../services/media.service.js';
+import { getLocationMediaForDailyPost } from '../services/media.service.js';
 import { fetchPexelsImage } from '../services/pexels.service.js';
 import { publishPostForLocation } from '../services/posts.service.js';
+import {
+  getOrCreateLocationSchedule,
+  getPostTypeForScheduledDay,
+  hasPostedToday,
+  isScheduledPostWindow,
+} from '../services/schedule.service.js';
 
 const MAX_RETRIES = 3;
+const CRON_WINDOW_MINUTES = 15;
 
 /**
  * Rough category label for post copy when no category is stored in DB.
@@ -15,6 +22,9 @@ function inferCategoryLabel(businessName) {
   const n = businessName.toLowerCase();
   if (n.includes('car') || n.includes('auto') || n.includes('vehicle')) {
     return 'automotive';
+  }
+  if (n.includes('hvac') || n.includes('heating') || n.includes('cooling')) {
+    return 'HVAC';
   }
   if (n.includes('restaurant') || n.includes('cafe') || n.includes('dining')) {
     return 'dining';
@@ -79,21 +89,51 @@ async function publishLocationWithRetries(locationId, payload) {
   throw lastError;
 }
 
+async function getRecentPostMediaUrls(locationId, limit = 20) {
+  const recent = await prisma.post.findMany({
+    where: { locationId, mediaUrl: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    select: { mediaUrl: true },
+  });
+  return recent.map((p) => p.mediaUrl).filter(Boolean);
+}
+
 /**
- * Pexels image first, then Cloudinary/DB media, then null.
+ * Pexels first (varied stock photos); Cloudinary/media library only if Pexels unavailable.
  */
-async function resolveDailyPostMediaUrl(locationId, businessName, category, city) {
-  let mediaUrl = await fetchPexelsImage(businessName, category, city);
+async function resolveDailyPostMediaUrl(locationId, businessName, category, city, publishType) {
+  const recentUrls = await getRecentPostMediaUrls(locationId);
+
+  let mediaUrl = await fetchPexelsImage(businessName, category, city, {
+    excludeUrls: recentUrls,
+  });
+  let source = mediaUrl ? 'pexels' : null;
 
   if (!mediaUrl) {
-    mediaUrl = await getLocationMediaFallbackUrl(locationId, 'UPDATE');
+    const { url, poolSize } = await getLocationMediaForDailyPost(locationId, publishType);
+    mediaUrl = url;
+    source = mediaUrl ? 'cloudinary' : null;
+    console.info(
+      JSON.stringify({
+        event: 'daily_post_media_resolved',
+        locationId,
+        publishType,
+        hasMedia: Boolean(mediaUrl),
+        source,
+        poolSize,
+      }),
+    );
+    return mediaUrl;
   }
 
   console.info(
     JSON.stringify({
       event: 'daily_post_media_resolved',
       locationId,
+      publishType,
       hasMedia: Boolean(mediaUrl),
+      source,
     }),
   );
 
@@ -101,10 +141,12 @@ async function resolveDailyPostMediaUrl(locationId, businessName, category, city
 }
 
 /**
- * One run: active locations → template post → publish service (respects MOCK_MODE).
- * @returns {Promise<{ locationCount: number; ok: number; failed: number; results: Array<{ locationId: string; success: boolean; postId?: string; error?: string }> }>}
+ * @param {{ force?: boolean }} [options] - force=true skips schedule window and already-posted-today (manual job)
  */
-export async function runDailyPostPublisher() {
+export async function runDailyPostPublisher(options = {}) {
+  const { force = false } = options;
+  const now = new Date();
+
   const locations = await prisma.location.findMany({
     where: {
       status: 'ACTIVE',
@@ -117,12 +159,14 @@ export async function runDailyPostPublisher() {
     JSON.stringify({
       event: 'daily_post_job_start',
       locationCount: locations.length,
+      force,
     }),
   );
 
   let ok = 0;
   let failed = 0;
-  /** @type {Array<{ locationId: string; success: boolean; postId?: string; error?: string }>} */
+  let skipped = 0;
+  /** @type {Array<{ locationId: string; success: boolean; postId?: string; error?: string; skipped?: boolean; reason?: string }>} */
   const results = [];
   const dayOfYear = Math.floor(
     (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000,
@@ -132,12 +176,60 @@ export async function runDailyPostPublisher() {
     const locationId = loc.id;
     const businessName = loc.business?.name?.trim() || 'Business';
     const category = inferCategoryLabel(businessName);
+
+    const schedule = await getOrCreateLocationSchedule(locationId);
+
+    if (!force && !isScheduledPostWindow(schedule, now, CRON_WINDOW_MINUTES)) {
+      skipped += 1;
+      results.push({
+        locationId: loc.id,
+        success: false,
+        skipped: true,
+        reason: 'outside_schedule_window',
+      });
+      console.info(
+        JSON.stringify({
+          event: 'daily_post_skipped_schedule',
+          locationId: loc.id,
+          businessName,
+          postDays: schedule.postDays,
+          postTime: schedule.postTime,
+          timezone: schedule.timezone,
+        }),
+      );
+      continue;
+    }
+
+    if (!force && (await hasPostedToday(locationId, schedule.timezone))) {
+      skipped += 1;
+      results.push({
+        locationId: loc.id,
+        success: false,
+        skipped: true,
+        reason: 'already_posted_today',
+      });
+      console.info(
+        JSON.stringify({
+          event: 'daily_post_skipped_already_posted',
+          locationId: loc.id,
+          businessName,
+        }),
+      );
+      continue;
+    }
+
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      timeZone: schedule.timezone || 'America/New_York',
+    }).format(new Date());
+    const { scheduleType, publishType } = getPostTypeForScheduledDay(schedule, weekday);
+
     const content = await generatePostContent(
       locationId,
       businessName,
       category,
       'New Jersey',
-      'UPDATE',
+      publishType,
       dayOfYear,
     );
 
@@ -146,11 +238,12 @@ export async function runDailyPostPublisher() {
       businessName,
       category,
       'New Jersey',
+      publishType,
     );
 
     try {
       const post = await publishLocationWithRetries(loc.id, {
-        type: 'UPDATE',
+        type: publishType,
         content,
         mediaUrl,
       });
@@ -163,6 +256,8 @@ export async function runDailyPostPublisher() {
         details: {
           postId: post.id,
           source: 'dailyPostPublisher',
+          scheduleType,
+          publishType,
         },
       });
 
@@ -173,6 +268,8 @@ export async function runDailyPostPublisher() {
           businessName,
           ghlLocationId: loc.ghlLocationId,
           postId: post.id,
+          scheduleType,
+          publishType,
         }),
       );
     } catch (err) {
@@ -224,6 +321,7 @@ export async function runDailyPostPublisher() {
     locationCount: locations.length,
     ok,
     failed,
+    skipped,
     results,
   };
 
@@ -232,16 +330,17 @@ export async function runDailyPostPublisher() {
       event: 'daily_post_job_complete',
       ok,
       failed,
+      skipped,
     }),
   );
 
   return summary;
 }
 
-/** 09:00 America/New_York daily */
+/** Every 15 minutes — each location posts at its configured postTime on postDays */
 export function startDailyPostPublisher() {
   cron.schedule(
-    '0 9 * * *',
+    '*/15 * * * *',
     async () => {
       try {
         await runDailyPostPublisher();
@@ -254,14 +353,15 @@ export function startDailyPostPublisher() {
         );
       }
     },
-    { timezone: 'America/New_York' },
+    { timezone: 'UTC' },
   );
 
   console.info(
     JSON.stringify({
       event: 'daily_post_scheduler_registered',
-      cron: '0 9 * * *',
-      timezone: 'America/New_York',
+      cron: '*/15 * * * *',
+      timezone: 'UTC',
+      note: 'Per-location postTime and postDays from LocationSchedule',
     }),
   );
 }

@@ -7,6 +7,7 @@ import { GhlStatusPage } from './pages/GhlStatusPage';
 import { MediaLibraryPage } from './pages/MediaLibraryPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PostsPage } from './pages/PostsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="ghl-status" element={<GhlStatusPage />} />
             <Route path="media" element={<MediaLibraryPage />} />
             <Route path="approval" element={<ApprovalQueuePage />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

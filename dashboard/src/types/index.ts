@@ -51,12 +51,29 @@ export interface DailyJobResult {
   locationCount: number;
   ok: number;
   failed: number;
+  skipped?: number;
   results: Array<{
     locationId: string;
     success: boolean;
     postId?: string;
     error?: string;
+    skipped?: boolean;
+    reason?: string;
   }>;
+}
+
+export interface LocationSchedule {
+  id: string;
+  locationId: string;
+  postsPerWeek: number;
+  postDays: string[];
+  postTime: string;
+  postTypes: string[];
+  postDayTypes: Record<string, string>;
+  postDayTimes: Record<string, string>;
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GhlFieldSetupResult {

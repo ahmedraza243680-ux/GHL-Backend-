@@ -5,6 +5,7 @@ import type {
   ApiResponse,
   DailyJobResult,
   GhlFieldSetupResult,
+  LocationSchedule,
   MediaRecord,
   PaginatedPostsResponse,
   Post,
@@ -162,4 +163,34 @@ export async function deletePost(
     ApiResponse<{ deleted: boolean; postId: string }>
   >(`/locations/${locationId}/posts/${postId}`);
   return data.data;
+}
+
+export async function fetchLocationSchedule(
+  locationId: string,
+): Promise<LocationSchedule> {
+  const { data } = await api.get<ApiResponse<{ schedule: LocationSchedule }>>(
+    `/locations/${locationId}/schedule`,
+  );
+  return data.data.schedule;
+}
+
+export interface LocationSchedulePayload {
+  postsPerWeek: number;
+  postDays: string[];
+  postTime: string;
+  postTypes: string[];
+  postDayTypes: Record<string, string>;
+  postDayTimes: Record<string, string>;
+  timezone: string;
+}
+
+export async function updateLocationSchedule(
+  locationId: string,
+  payload: LocationSchedulePayload,
+): Promise<LocationSchedule> {
+  const { data } = await api.put<ApiResponse<{ schedule: LocationSchedule }>>(
+    `/locations/${locationId}/schedule`,
+    payload,
+  );
+  return data.data.schedule;
 }

@@ -8,7 +8,7 @@ const router = Router();
 router.post(
   '/run-daily-job',
   asyncHandler(async (req, res) => {
-    const data = await runDailyPostPublisher();
+    const data = await runDailyPostPublisher({ force: true });
     return res.json({
       success: true,
       data,

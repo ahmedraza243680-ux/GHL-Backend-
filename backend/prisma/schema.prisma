@@ -65,8 +65,26 @@ model Location {
   posts              Post[]
   media              Media[]
   auditLogs          AuditLog[]
+  schedule           LocationSchedule?
 
   @@index([businessId])
+}
+
+model LocationSchedule {
+  id            String   @id @default(cuid())
+  locationId    String   @unique
+  location      Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  postsPerWeek  Int      @default(3)
+  postDays      String[] @default(["Monday", "Wednesday", "Friday"])
+  postTime      String   @default("09:00")
+  postTypes     String[] @default(["UPDATE", "OFFER", "VIDEO"])
+  /// Per weekday: { "Monday": "UPDATE", "Tuesday": "OFFER", ... }
+  postDayTypes  Json     @default("{}")
+  /// Per weekday: { "Monday": "09:00", "Tuesday": "10:30", ... }
+  postDayTimes  Json     @default("{}")
+  timezone      String   @default("America/New_York")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Media {

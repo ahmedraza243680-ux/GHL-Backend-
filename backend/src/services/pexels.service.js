@@ -39,9 +39,11 @@ function pickRandom(items) {
 }
 
 /**
+ * @param {object} [options]
+ * @param {string[]} [options.excludeUrls] - skip these image URLs (e.g. recent posts)
  * @returns {Promise<string|null>} photo.src.large2x URL
  */
-export async function fetchPexelsImage(businessName, category, city) {
+export async function fetchPexelsImage(businessName, category, city, options = {}) {
   const headers = pexelsHeaders();
   if (!headers) {
     console.warn(JSON.stringify({ event: 'pexels_skipped', reason: 'PEXELS_API_KEY not configured' }));
@@ -49,11 +51,13 @@ export async function fetchPexelsImage(businessName, category, city) {
   }
 
   const query = buildSearchQuery(businessName, category, city);
+  const exclude = new Set((options.excludeUrls ?? []).filter(Boolean));
+  const page = Math.floor(Math.random() * 5) + 1;
 
   try {
     const response = await axios.get(PEXELS_PHOTO_SEARCH, {
       headers,
-      params: { query, per_page: 20, orientation: 'landscape' },
+      params: { query, per_page: 30, orientation: 'landscape', page },
       validateStatus: () => true,
     });
 
@@ -61,8 +65,14 @@ export async function fetchPexelsImage(businessName, category, city) {
       throw new Error(response.data?.error ?? `HTTP ${response.status}`);
     }
 
-    const photo = pickRandom(response.data?.photos);
-    const url = photo?.src?.large2x ?? photo?.src?.large ?? null;
+    const photos = (response.data?.photos ?? [])
+      .map((p) => ({
+        url: p?.src?.large2x ?? p?.src?.large ?? null,
+      }))
+      .filter((p) => p.url && !exclude.has(p.url));
+
+    const picked = pickRandom(photos.length ? photos : response.data?.photos);
+    const url = picked?.url ?? picked?.src?.large2x ?? picked?.src?.large ?? null;
     if (!url) {
       console.warn(JSON.stringify({ event: 'pexels_image_empty', query }));
       return null;

@@ -161,57 +161,141 @@ export async function getMediaForPost(locationId, postType) {
   return PLACEHOLDER_IMAGE_URL;
 }
 
-/**
- * Random real media URL from Cloudinary or the Media table, or null if none.
- * Used as fallback when Pexels has no result (no placeholder).
- */
-export async function getLocationMediaFallbackUrl(locationId, postType = 'UPDATE') {
+/** Stable key for deduping Cloudinary URLs (transform/query params ignored). */
+export function normalizeMediaUrlKey(url) {
+  if (!url || typeof url !== 'string') return '';
+  if (url.includes('res.cloudinary.com')) {
+    const publicId = cloudinaryPublicIdFromUrl(url);
+    if (publicId) return publicId;
+  }
+  try {
+    const u = new URL(url);
+    return `${u.hostname}${u.pathname}`;
+  } catch {
+    return url.split('?')[0];
+  }
+}
+
+async function collectLocationMediaUrls(locationId, postType) {
   const type = normalizePostType(postType);
-  const folder = cloudinaryFolder(locationId, type);
+  const locationPrefix = `gbp-automation/${locationId}`;
+  const urls = new Set();
 
   const stored = await prisma.media.findMany({
-    where: { locationId, postType: type },
+    where: { locationId },
     select: { url: true },
   });
-  const realStored = stored.filter((m) => !isPlaceholderMediaUrl(m.url));
-  if (realStored.length > 0) {
-    return realStored[Math.floor(Math.random() * realStored.length)].url;
+
+  for (const row of stored) {
+    if (row.url && !isPlaceholderMediaUrl(row.url)) {
+      urls.add(row.url);
+    }
   }
 
   if (
-    env.MOCK_MODE ||
-    !env.CLOUDINARY_CLOUD_NAME ||
-    !env.CLOUDINARY_API_KEY ||
-    !env.CLOUDINARY_API_SECRET
+    !env.MOCK_MODE &&
+    env.CLOUDINARY_CLOUD_NAME &&
+    env.CLOUDINARY_API_KEY &&
+    env.CLOUDINARY_API_SECRET
   ) {
-    return null;
-  }
-
-  ensureCloudinaryConfigured();
-
-  try {
-    const { resources } = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: folder,
-      max_results: 100,
-    });
-
-    const real = (resources ?? []).filter((r) => r.secure_url && !isPlaceholderMediaUrl(r.secure_url));
-    if (real.length > 0) {
-      const pick = real[Math.floor(Math.random() * real.length)];
-      return pick.secure_url;
+    ensureCloudinaryConfigured();
+    try {
+      const { resources } = await cloudinary.api.resources({
+        type: 'upload',
+        prefix: locationPrefix,
+        max_results: 500,
+      });
+      for (const r of resources ?? []) {
+        if (r.secure_url && !isPlaceholderMediaUrl(r.secure_url)) {
+          urls.add(r.secure_url);
+        }
+      }
+    } catch (e) {
+      console.warn(
+        JSON.stringify({
+          event: 'cloudinary_list_failed',
+          folder: locationPrefix,
+          error: e?.message ?? String(e),
+        }),
+      );
     }
-  } catch (e) {
-    console.warn(
-      JSON.stringify({
-        event: 'cloudinary_list_failed',
-        folder,
-        error: e?.message ?? String(e),
-      }),
-    );
   }
 
-  return null;
+  return [...urls];
+}
+
+async function getLastUsedAtByMediaKey(locationId) {
+  const posts = await prisma.post.findMany({
+    where: { locationId, mediaUrl: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: { mediaUrl: true, createdAt: true },
+  });
+
+  const map = new Map();
+  for (const post of posts) {
+    const key = normalizeMediaUrlKey(post.mediaUrl);
+    if (key && !map.has(key)) {
+      map.set(key, post.createdAt);
+    }
+  }
+  return map;
+}
+
+/** Pick the upload used longest ago (never-used first). */
+function pickLeastRecentlyUsed(urls, lastUsedByKey) {
+  if (!urls.length) return null;
+
+  let neverUsed = null;
+  let bestUrl = null;
+  let oldestUsedAt = null;
+
+  for (const url of urls) {
+    const key = normalizeMediaUrlKey(url);
+    const usedAt = lastUsedByKey.get(key);
+    if (usedAt === undefined) {
+      neverUsed = url;
+      break;
+    }
+    if (oldestUsedAt === null || usedAt < oldestUsedAt) {
+      oldestUsedAt = usedAt;
+      bestUrl = url;
+    }
+  }
+
+  return neverUsed ?? bestUrl ?? urls[0];
+}
+
+export function wouldReuseLastPostMedia(selectedUrl, recentPostUrls) {
+  if (!selectedUrl || !recentPostUrls?.length) return false;
+  return (
+    normalizeMediaUrlKey(selectedUrl) === normalizeMediaUrlKey(recentPostUrls[0])
+  );
+}
+
+/**
+ * Random real media URL from Cloudinary or the Media table, or null if none.
+ */
+export async function getLocationMediaFallbackUrl(locationId, postType = 'UPDATE') {
+  const urls = await collectLocationMediaUrls(locationId, postType);
+  if (!urls.length) return null;
+  const lastUsed = await getLastUsedAtByMediaKey(locationId);
+  return pickLeastRecentlyUsed(urls, lastUsed);
+}
+
+/**
+ * Prefer uploaded Cloudinary/media library images for daily posts (LRU rotation).
+ * @returns {Promise<{ url: string|null, poolSize: number }>}
+ */
+export async function getLocationMediaForDailyPost(locationId, postType = 'UPDATE') {
+  const urls = await collectLocationMediaUrls(locationId, postType);
+  if (!urls.length) {
+    return { url: null, poolSize: 0 };
+  }
+
+  const lastUsed = await getLastUsedAtByMediaKey(locationId);
+  const url = pickLeastRecentlyUsed(urls, lastUsed);
+  return { url, poolSize: urls.length };
 }
 
 /**
