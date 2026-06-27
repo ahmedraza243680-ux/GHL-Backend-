@@ -51,11 +51,11 @@ export function AppSidebar({ onNavigate, className }: AppSidebarProps) {
       <div className="border-b border-slate-800 px-5 py-5">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
-            GBP
+            PW
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">GBP Automation</p>
-            <p className="text-xs text-slate-500">Automation Dashboard</p>
+            <p className="truncate text-sm font-semibold text-white">Peakwa</p>
+            <p className="text-xs text-slate-500">Admin Dashboard</p>
           </div>
         </div>
       </div>

@@ -29,7 +29,7 @@ export function Layout() {
               </SheetTrigger>
               <SheetContent side="left" className="gap-0 p-0">
                 <AppSidebar
-                  className="h-full pt-12"
+                  className="h-full"
                   onNavigate={() => setMobileNavOpen(false)}
                 />
               </SheetContent>
@@ -37,7 +37,7 @@ export function Layout() {
 
             <div className="min-w-0 flex-1">
               <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 sm:px-4 sm:text-sm">
-                <span className="truncate">GBP Automation Platform</span>
+                <span className="truncate">Peakwa Admin Dashboard</span>
               </div>
             </div>
           </div>
