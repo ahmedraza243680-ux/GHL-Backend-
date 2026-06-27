@@ -7,6 +7,7 @@ import {
   Layout,
   LayoutDashboard,
   Mail,
+  Send,
   PlayCircle,
   Settings2,
   SlidersHorizontal,
@@ -29,6 +30,7 @@ const phase4NavItems = [
   { to: '/sites', label: 'Generated Sites', icon: Globe },
   { to: '/industry-schemas', label: 'Industry Schemas', icon: Database },
   { to: '/contacts', label: 'Contact Submissions', icon: Mail },
+  { to: '/form-test', label: 'Form Submission (Test)', icon: Send },
 ];
 
 function navClass(isActive: boolean) {

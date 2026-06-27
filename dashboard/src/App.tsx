@@ -3,6 +3,7 @@ import { LocationsProvider } from './contexts/LocationsContext';
 import { Layout } from './components/Layout';
 import { ApprovalQueuePage } from './pages/ApprovalQueuePage';
 import { ContactSubmissionsPage } from './pages/ContactSubmissionsPage';
+import { FormSubmissionTestPage } from './pages/FormSubmissionTestPage';
 import { DailyJobPage } from './pages/DailyJobPage';
 import { GeneratedSitesPage } from './pages/GeneratedSitesPage';
 import { GhlStatusPage } from './pages/GhlStatusPage';
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="sites" element={<GeneratedSitesPage />} />
             <Route path="industry-schemas" element={<IndustrySchemasPage />} />
             <Route path="contacts" element={<ContactSubmissionsPage />} />
+            <Route path="form-test" element={<FormSubmissionTestPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
