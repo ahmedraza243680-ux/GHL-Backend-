@@ -61,11 +61,46 @@ function validateTemplatePayload(data, { partial = false } = {}) {
   return result;
 }
 
-export async function getAllTemplates() {
-  return prisma.template.findMany({
-    where: { isActive: true },
-    orderBy: { createdAt: 'desc' },
-  });
+export async function getAllTemplates(query = {}) {
+  const page = Math.max(1, Number.parseInt(String(query.page ?? 1), 10) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, Number.parseInt(String(query.limit ?? 12), 10) || 12),
+  );
+  const search = String(query.search ?? '').trim();
+
+  const where = { isActive: true };
+
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { industry: { contains: search, mode: 'insensitive' } },
+      { slug: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [templates, total] = await Promise.all([
+    prisma.template.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.template.count({ where }),
+  ]);
+
+  return {
+    templates,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    },
+  };
 }
 
 export async function getTemplateBySlug(slug) {

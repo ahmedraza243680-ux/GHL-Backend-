@@ -16,6 +16,7 @@ import {
   getSchemaForIndustry,
   updateIndustrySchema,
 } from '../services/industrySchema.service.js';
+import { listContactSubmissions } from '../services/contactSubmission.service.js';
 import {
   createTemplate,
   deleteTemplate,
@@ -674,21 +675,11 @@ async function buildSiteImages(site) {
 router.get(
   '/contacts',
   asyncHandler(async (req, res) => {
-    const contacts = await prisma.contactSubmission.findMany({
-      include: {
-        site: {
-          select: {
-            businessName: true,
-            slug: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { contacts, total, pagination } = await listContactSubmissions(req.query);
 
     return res.json({
       success: true,
-      data: { contacts, total: contacts.length },
+      data: { contacts, total, pagination },
       requestId: req.requestId,
     });
   }),
@@ -718,10 +709,10 @@ router.delete(
 router.get(
   '/industry-schemas',
   asyncHandler(async (req, res) => {
-    const schemas = await getAllIndustrySchemas();
+    const { schemas, pagination } = await getAllIndustrySchemas(req.query);
     return res.json({
       success: true,
-      data: { schemas },
+      data: { schemas, pagination },
       requestId: req.requestId,
     });
   }),
@@ -803,10 +794,10 @@ router.get(
 router.get(
   '/templates',
   asyncHandler(async (req, res) => {
-    const templates = await getAllTemplates();
+    const { templates, pagination } = await getAllTemplates(req.query);
     return res.json({
       success: true,
-      data: { templates },
+      data: { templates, pagination },
       requestId: req.requestId,
     });
   }),
@@ -851,10 +842,13 @@ router.delete(
 router.get(
   '/sites',
   asyncHandler(async (req, res) => {
-    const sites = await listGeneratedSites();
+    const { sites, pagination } = await listGeneratedSites(req.query);
     return res.json({
       success: true,
-      data: { sites: sites.map(serializeSiteWithTheme) },
+      data: {
+        sites: sites.map(serializeSiteWithTheme),
+        pagination,
+      },
       requestId: req.requestId,
     });
   }),

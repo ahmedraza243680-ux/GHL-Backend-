@@ -83,10 +83,55 @@ export async function getSchemaForIndustry(industry) {
   return fallback;
 }
 
-export async function getAllIndustrySchemas() {
-  return prisma.industrySchema.findMany({
-    orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
-  });
+export async function getAllIndustrySchemas(query = {}) {
+  const page = Math.max(1, Number.parseInt(String(query.page ?? 1), 10) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, Number.parseInt(String(query.limit ?? 12), 10) || 12),
+  );
+  const search = String(query.search ?? '').trim();
+  const defaultFilter = String(query.default ?? 'all').trim().toLowerCase();
+
+  const where = {};
+
+  if (search) {
+    where.OR = [
+      { industry: { contains: search, mode: 'insensitive' } },
+      { displayName: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  if (defaultFilter === 'true' || defaultFilter === 'default' || defaultFilter === 'yes') {
+    where.isDefault = true;
+  } else if (
+    defaultFilter === 'false' ||
+    defaultFilter === 'non-default' ||
+    defaultFilter === 'no'
+  ) {
+    where.isDefault = false;
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [schemas, total] = await Promise.all([
+    prisma.industrySchema.findMany({
+      where,
+      orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
+      skip,
+      take: limit,
+    }),
+    prisma.industrySchema.count({ where }),
+  ]);
+
+  return {
+    schemas,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    },
+  };
 }
 
 export async function createIndustrySchema(data) {

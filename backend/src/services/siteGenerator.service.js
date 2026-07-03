@@ -413,14 +413,57 @@ export async function generateSite(formData) {
   }
 }
 
-export async function listGeneratedSites() {
-  return prisma.generatedSite.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      template: true,
-      _count: { select: { locationPages: true } },
+export async function listGeneratedSites(query = {}) {
+  const page = Math.max(1, Number.parseInt(String(query.page ?? 1), 10) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, Number.parseInt(String(query.limit ?? 12), 10) || 12),
+  );
+  const search = String(query.search ?? '').trim();
+  const status = String(query.status ?? '').trim().toUpperCase();
+
+  const where = {};
+
+  if (search) {
+    where.OR = [
+      { businessName: { contains: search, mode: 'insensitive' } },
+      { industry: { contains: search, mode: 'insensitive' } },
+      { city: { contains: search, mode: 'insensitive' } },
+      { state: { contains: search, mode: 'insensitive' } },
+      { slug: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  if (status && ['PENDING', 'ACTIVE', 'INACTIVE'].includes(status)) {
+    where.status = status;
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [sites, total] = await Promise.all([
+    prisma.generatedSite.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        template: true,
+        _count: { select: { locationPages: true } },
+      },
+    }),
+    prisma.generatedSite.count({ where }),
+  ]);
+
+  return {
+    sites,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     },
-  });
+  };
 }
 
 export async function getGeneratedSiteBySlug(slug) {
