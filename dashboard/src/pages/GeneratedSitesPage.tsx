@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, ExternalLink, MapPin, Minus, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Loader2, ExternalLink, MapPin, Minus, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import {
   addLocationPages,
   deletePhase4Site,
   fetchPhase4Site,
-  fetchPhase4Sites,
+  fetchPhase4SitesPaginated,
   fetchSiteContacts,
   regeneratePhase4Site,
   updatePhase4Site,
@@ -14,7 +14,7 @@ import {
   type Phase4LocationPage,
   type SiteStatus,
 } from '../api/endpoints';
-import { ErrorBanner, PageHeader, SuccessBanner } from '../components/ui';
+import { ErrorBanner, PageHeader, PaginatedPageLayout, Pagination, PaginationFooter, SuccessBanner } from '../components/ui';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { CardListSkeleton, TableSkeleton } from '../components/ui/skeleton';
+import { CardListSkeleton } from '../components/ui/skeleton';
 import { cn } from '../lib/utils';
 import { formatDate } from '../utils/format';
 
@@ -139,6 +139,96 @@ function SiteThemeSection({ site }: { site: SiteWithTheme }) {
 
 const inputClass =
   'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40';
+
+function SiteCard({
+  site,
+  onDetails,
+  onEdit,
+  onDelete,
+}: {
+  site: Phase4GeneratedSite;
+  onDetails: (site: Phase4GeneratedSite) => void;
+  onEdit: (site: Phase4GeneratedSite) => void;
+  onDelete: (site: Phase4GeneratedSite) => void;
+}) {
+  return (
+    <div className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-white">{site.businessName}</p>
+          <p className="mt-0.5 text-sm capitalize text-slate-400">{site.industry}</p>
+        </div>
+        <SiteStatusBadge status={site.status} />
+      </div>
+
+      <dl className="mb-5 flex-1 space-y-2.5 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">City</dt>
+          <dd className="text-right text-slate-300">
+            {site.city}, {site.state}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Slug</dt>
+          <dd className="truncate font-mono text-xs text-slate-400" title={site.slug}>
+            {site.slug}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Template</dt>
+          <dd className="text-right text-slate-300">{site.template?.name ?? '—'}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Created</dt>
+          <dd className="text-right text-slate-300">{formatDate(site.createdAt)}</dd>
+        </div>
+      </dl>
+
+      <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 min-w-[7.5rem]"
+          onClick={() => void onDetails(site)}
+        >
+          View Details
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 min-w-[7.5rem]"
+          onClick={() => openSitePreview(site.slug)}
+          title="Preview site"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Preview
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 min-w-[7.5rem]"
+          onClick={() => void onEdit(site)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 min-w-[7.5rem] border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          onClick={() => onDelete(site)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function SiteStatusBadge({ status }: { status: SiteStatus }) {
   const styles: Record<SiteStatus, string> = {
@@ -309,6 +399,13 @@ function ThemePreviewCircles({
 export function GeneratedSitesPage() {
   const [sites, setSites] = useState<Phase4GeneratedSite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | SiteStatus>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [totalItems, setTotalItems] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -356,18 +453,43 @@ export function GeneratedSitesPage() {
     });
   }
 
-  const loadSites = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchPhase4Sites();
-      setSites(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load sites');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadSites = useCallback(
+    async (pageOverride?: number) => {
+      const targetPage = pageOverride ?? page;
+      setLoading(true);
+      setError(null);
+      try {
+        const { sites: data, pagination } = await fetchPhase4SitesPaginated({
+          page: targetPage,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+          status: statusFilter === 'all' ? undefined : statusFilter,
+        });
+        setSites(data);
+        setTotalItems(pagination.total);
+        if (targetPage > pagination.totalPages && pagination.totalPages > 0) {
+          setPage(pagination.totalPages);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load sites');
+      } finally {
+        setLoading(false);
+        setInitialLoad(false);
+      }
+    },
+    [page, pageSize, debouncedSearch, statusFilter],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, pageSize]);
 
   useEffect(() => {
     void loadSites();
@@ -591,13 +713,18 @@ export function GeneratedSitesPage() {
     setSuccess(null);
     try {
       await deletePhase4Site(deleteTarget.id);
-      setSites((prev) => prev.filter((s) => s.id !== deleteTarget.id));
       if (selectedSite?.id === deleteTarget.id) {
         setDetailOpen(false);
         setSelectedSite(null);
       }
       setSuccess(`"${deleteTarget.businessName}" deleted.`);
       setDeleteTarget(null);
+      const nextPage = sites.length === 1 && page > 1 ? page - 1 : page;
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await loadSites(nextPage);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete site');
     } finally {
@@ -618,8 +745,28 @@ export function GeneratedSitesPage() {
         ]
       : [];
 
+  const hasActiveFilters = debouncedSearch.length > 0 || statusFilter !== 'all';
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+
   return (
-    <div>
+    <PaginatedPageLayout
+      footer={
+        !initialLoad && totalItems > 0 ? (
+          <PaginationFooter className={cn(loading && 'pointer-events-none opacity-60')}>
+            <Pagination
+              page={safePage}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              itemLabel="sites"
+              pageSizeOptions={[6, 12, 24, 48]}
+              onPageChange={(nextPage) => setPage(nextPage)}
+              onPageSizeChange={(size) => setPageSize(size)}
+            />
+          </PaginationFooter>
+        ) : null
+      }
+    >
       <PageHeader
         title="Generated Sites"
         description="View AI-generated websites and manage location landing pages."
@@ -628,202 +775,83 @@ export function GeneratedSitesPage() {
       {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <SuccessBanner message={success} /> : null}
 
-      {loading ? (
-        <>
-          <CardListSkeleton count={4} />
-          <div className="mt-6 hidden lg:block">
-            <TableSkeleton rows={5} />
-          </div>
-        </>
-      ) : sites.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center text-sm text-slate-500">
-          No generated sites yet. Sites are created via the site generation webhook.
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="relative w-full lg:max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search business, industry, city, slug…"
+            disabled={loading && initialLoad}
+            className={`${inputClass} pl-9`}
+          />
         </div>
-      ) : (
-        <>
-          {/* Mobile cards */}
-          <div className="space-y-4 lg:hidden">
-            {sites.map((site) => (
-              <div
-                key={site.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-              >
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-white">{site.businessName}</p>
-                    <p className="mt-0.5 text-xs capitalize text-slate-500">{site.industry}</p>
-                  </div>
-                  <SiteStatusBadge status={site.status} />
-                </div>
-                <dl className="mb-4 space-y-1 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">City</dt>
-                    <dd className="text-slate-300">
-                      {site.city}, {site.state}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">Slug</dt>
-                    <dd className="truncate font-mono text-xs text-slate-400">{site.slug}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">Template</dt>
-                    <dd className="text-slate-300">{site.template?.name ?? '—'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">Created</dt>
-                    <dd className="text-slate-300">{formatDate(site.createdAt)}</dd>
-                  </div>
-                </dl>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => void openDetails(site)}
-                  >
-                    View Details
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => openSitePreview(site.slug)}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Preview
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => void openEdit(site)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                    onClick={() => setDeleteTarget(site)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="text-sm text-slate-400" htmlFor="site-status-filter">
+            Status
+          </label>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as 'all' | SiteStatus)}
+            disabled={loading && initialLoad}
+          >
+            <SelectTrigger id="site-status-filter" className="w-full sm:w-[180px]">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="ACTIVE">Active</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="INACTIVE">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            {loading ? 'Loading…' : `${totalItems} site${totalItems === 1 ? '' : 's'}`}
+          </p>
+        </div>
+      </div>
 
-          {/* Desktop table — horizontal scroll when columns exceed viewport */}
-          <div className="hidden lg:block">
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="min-w-[1380px] w-full divide-y divide-slate-800">
-              <thead className="bg-slate-900/80">
-                <tr>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Business Name
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Industry
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    City
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Slug
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Status
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Template
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Created
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800 bg-slate-900/40">
-                {sites.map((site) => (
-                  <tr key={site.id} className="hover:bg-slate-800/30">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-200">
-                      {site.businessName}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm capitalize text-slate-400">
-                      {site.industry}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-300">
-                      {site.city}, {site.state}
-                    </td>
-                    <td
-                      className="max-w-[200px] truncate whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-300"
-                      title={site.slug}
-                    >
-                      {site.slug}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <SiteStatusBadge status={site.status} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-300">
-                      {site.template?.name ?? '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-400">
-                      {formatDate(site.createdAt)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void openDetails(site)}
-                        >
-                          View Details
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openSitePreview(site.slug)}
-                          title="Preview site"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          Preview
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void openEdit(site)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                          onClick={() => setDeleteTarget(site)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="flex-1">
+      {loading && sites.length === 0 ? (
+        <CardListSkeleton count={6} />
+      ) : (
+        <div className="relative min-h-[12rem]">
+          {loading ? (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-slate-950/70 backdrop-blur-[1px]"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                Loading sites…
+              </div>
             </div>
-          </div>
-        </>
+          ) : null}
+
+          {sites.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center text-sm text-slate-500">
+              {hasActiveFilters
+                ? 'No sites match your filters.'
+                : 'No generated sites yet. Sites are created via the site generation webhook.'}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {sites.map((site) => (
+                <SiteCard
+                  key={site.id}
+                  site={site}
+                  onDetails={openDetails}
+                  onEdit={openEdit}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
+      </div>
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-3xl">
@@ -1498,6 +1526,6 @@ export function GeneratedSitesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PaginatedPageLayout>
   );
 }

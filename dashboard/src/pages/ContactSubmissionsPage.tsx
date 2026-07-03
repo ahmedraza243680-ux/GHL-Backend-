@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Mail, Search, Trash2 } from 'lucide-react';
-import { deleteContactSubmission, fetchAllContacts, type ContactSubmission } from '../api/endpoints';
-import { ErrorBanner, PageHeader, SuccessBanner } from '../components/ui';
+import { useCallback, useEffect, useState } from 'react';
+import { Loader2, Mail, Search, Trash2 } from 'lucide-react';
+import {
+  deleteContactSubmission,
+  fetchContactsPaginated,
+  type ContactSubmission,
+} from '../api/endpoints';
+import {
+  ErrorBanner,
+  PageHeader,
+  PaginatedPageLayout,
+  Pagination,
+  PaginationFooter,
+  SuccessBanner,
+} from '../components/ui';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +31,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { CardListSkeleton, TableSkeleton } from '../components/ui/skeleton';
+import { CardListSkeleton } from '../components/ui/skeleton';
+import { cn } from '../lib/utils';
 import { formatDate } from '../utils/format';
 
 function messagePreview(message: string, max = 80) {
@@ -32,40 +44,115 @@ function messagePreview(message: string, max = 80) {
 const inputClass =
   'w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40';
 
+function ContactCard({
+  contact,
+  onSelect,
+  onDelete,
+}: {
+  contact: ContactSubmission;
+  onSelect: (contact: ContactSubmission) => void;
+  onDelete: (contact: ContactSubmission) => void;
+}) {
+  return (
+    <div className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+      <button type="button" onClick={() => onSelect(contact)} className="flex-1 text-left">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium text-white">{contact.name}</p>
+            <p className="mt-0.5 truncate text-sm text-slate-400">{contact.email}</p>
+          </div>
+          <span className="shrink-0 text-xs text-slate-500">{formatDate(contact.createdAt)}</span>
+        </div>
+
+        <dl className="mb-4 space-y-2.5 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="shrink-0 text-slate-500">Phone</dt>
+            <dd className="text-right text-slate-300">{contact.phone ?? '—'}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="shrink-0 text-slate-500">Site</dt>
+            <dd className="truncate text-right text-emerald-400/90">
+              {contact.site?.businessName ?? '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="mb-1 text-slate-500">Message</dt>
+            <dd className="line-clamp-3 text-slate-400">{messagePreview(contact.message, 120)}</dd>
+          </div>
+        </dl>
+      </button>
+
+      <div className="flex justify-end border-t border-slate-800 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          onClick={() => onDelete(contact)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function ContactSubmissionsPage() {
   const [contacts, setContacts] = useState<ContactSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [totalItems, setTotalItems] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ContactSubmission | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContactSubmission | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const loadContacts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchAllContacts();
-      setContacts(data.contacts);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load contact submissions');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadContacts = useCallback(
+    async (pageOverride?: number) => {
+      const targetPage = pageOverride ?? page;
+      setLoading(true);
+      setError(null);
+      try {
+        const { contacts: data, pagination } = await fetchContactsPaginated({
+          page: targetPage,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+        });
+        setContacts(data);
+        setTotalItems(pagination.total);
+        if (targetPage > pagination.totalPages && pagination.totalPages > 0) {
+          setPage(pagination.totalPages);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load contact submissions');
+      } finally {
+        setLoading(false);
+        setInitialLoad(false);
+      }
+    },
+    [page, pageSize, debouncedSearch],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, pageSize]);
 
   useEffect(() => {
     void loadContacts();
   }, [loadContacts]);
-
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return contacts;
-    return contacts.filter((contact) =>
-      (contact.site?.businessName ?? '').toLowerCase().includes(query),
-    );
-  }, [contacts, search]);
 
   async function handleDelete() {
     if (!deleteTarget || deleting) return;
@@ -76,12 +163,17 @@ export function ContactSubmissionsPage() {
 
     try {
       await deleteContactSubmission(deleteTarget.id);
-      setContacts((prev) => prev.filter((c) => c.id !== deleteTarget.id));
       if (selected?.id === deleteTarget.id) {
         setSelected(null);
       }
       setSuccess(`Submission from ${deleteTarget.name} deleted.`);
       setDeleteTarget(null);
+      const nextPage = contacts.length === 1 && page > 1 ? page - 1 : page;
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await loadContacts(nextPage);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete submission');
     } finally {
@@ -89,8 +181,28 @@ export function ContactSubmissionsPage() {
     }
   }
 
+  const hasActiveFilters = debouncedSearch.length > 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+
   return (
-    <div>
+    <PaginatedPageLayout
+      footer={
+        !initialLoad && totalItems > 0 ? (
+          <PaginationFooter className={cn(loading && 'pointer-events-none opacity-60')}>
+            <Pagination
+              page={safePage}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              itemLabel="submissions"
+              pageSizeOptions={[6, 12, 24, 48]}
+              onPageChange={(nextPage) => setPage(nextPage)}
+              onPageSizeChange={(size) => setPageSize(size)}
+            />
+          </PaginationFooter>
+        ) : null
+      }
+    >
       <PageHeader
         title="Contact Submissions"
         description="View contact form submissions from all generated sites."
@@ -100,167 +212,64 @@ export function ContactSubmissionsPage() {
       {success ? <SuccessBanner message={success} /> : null}
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-sm">
+        <div className="relative w-full sm:max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <input
             type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by site name…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search name, email, phone, site, message…"
+            disabled={loading && initialLoad}
             className={inputClass}
           />
         </div>
         <p className="text-sm text-slate-400">
-          {loading ? 'Loading…' : `${filtered.length} submission${filtered.length === 1 ? '' : 's'}`}
+          {loading ? 'Loading…' : `${totalItems} submission${totalItems === 1 ? '' : 's'}`}
         </p>
       </div>
 
-      {loading ? (
-        <>
-          <CardListSkeleton count={4} />
-          <div className="mt-6 hidden lg:block">
-            <TableSkeleton rows={5} />
-          </div>
-        </>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center">
-          <Mail className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-500">
-            {search.trim() ? 'No submissions match your search.' : 'No contact submissions yet.'}
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-4 lg:hidden">
-            {filtered.map((contact) => (
+      <div className="flex-1">
+        {loading && contacts.length === 0 ? (
+          <CardListSkeleton count={6} />
+        ) : (
+          <div className="relative min-h-[12rem]">
+            {loading ? (
               <div
-                key={contact.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-slate-950/70 backdrop-blur-[1px]"
+                aria-live="polite"
+                aria-busy="true"
               >
-                <button
-                  type="button"
-                  onClick={() => setSelected(contact)}
-                  className="w-full text-left"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium text-white">{contact.name}</p>
-                      <p className="text-sm text-slate-400">{contact.email}</p>
-                    </div>
-                    <span className="shrink-0 text-xs text-slate-500">
-                      {formatDate(contact.createdAt)}
-                    </span>
-                  </div>
-                  <p className="mb-1 text-sm text-emerald-400/90">
-                    {contact.site?.businessName ?? 'Unknown site'}
-                  </p>
-                  <p className="line-clamp-2 text-sm text-slate-400">
-                    {messagePreview(contact.message, 120)}
-                  </p>
-                </button>
-                <div className="mt-3 flex justify-end border-t border-slate-800 pt-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                    onClick={() => setDeleteTarget(contact)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Button>
+                <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+                  <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                  Loading submissions…
                 </div>
               </div>
-            ))}
-          </div>
+            ) : null}
 
-          <div className="hidden lg:block">
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="min-w-[1040px] w-full divide-y divide-slate-800">
-                <thead className="bg-slate-900/80">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Email
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Phone
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Site
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Message
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Date
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-400">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 bg-slate-900/40">
-                  {filtered.map((contact) => (
-                    <tr key={contact.id} className="hover:bg-slate-800/30">
-                      <td
-                        className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-200"
-                        onClick={() => setSelected(contact)}
-                      >
-                        {contact.name}
-                      </td>
-                      <td
-                        className="cursor-pointer px-4 py-3 text-sm text-slate-300"
-                        onClick={() => setSelected(contact)}
-                      >
-                        {contact.email}
-                      </td>
-                      <td
-                        className="cursor-pointer px-4 py-3 text-sm text-slate-400"
-                        onClick={() => setSelected(contact)}
-                      >
-                        {contact.phone ?? '—'}
-                      </td>
-                      <td
-                        className="cursor-pointer px-4 py-3 text-sm text-slate-300"
-                        onClick={() => setSelected(contact)}
-                      >
-                        {contact.site?.businessName ?? '—'}
-                      </td>
-                      <td
-                        className="max-w-[200px] cursor-pointer truncate px-4 py-3 text-sm text-slate-400"
-                        onClick={() => setSelected(contact)}
-                      >
-                        {messagePreview(contact.message)}
-                      </td>
-                      <td
-                        className="cursor-pointer whitespace-nowrap px-4 py-3 text-sm text-slate-400"
-                        onClick={() => setSelected(contact)}
-                      >
-                        {formatDate(contact.createdAt)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                          onClick={() => setDeleteTarget(contact)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {contacts.length === 0 ? (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center">
+                <Mail className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+                <p className="text-sm text-slate-500">
+                  {hasActiveFilters
+                    ? 'No submissions match your search.'
+                    : 'No contact submissions yet.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {contacts.map((contact) => (
+                  <ContactCard
+                    key={contact.id}
+                    contact={contact}
+                    onSelect={setSelected}
+                    onDelete={setDeleteTarget}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        </>
-      )}
+        )}
+      </div>
 
       <Dialog open={Boolean(selected)} onOpenChange={() => setSelected(null)}>
         <DialogContent className="max-w-lg">
@@ -354,6 +363,6 @@ export function ContactSubmissionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PaginatedPageLayout>
   );
 }

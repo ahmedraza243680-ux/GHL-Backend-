@@ -162,6 +162,36 @@ export function JsonLog({ data, title = 'Server Response' }: JsonLogProps) {
   );
 }
 
+interface PaginatedPageLayoutProps {
+  children: ReactNode;
+  footer?: ReactNode;
+}
+
+/** Keeps pagination pinned to the bottom when the list is shorter than the viewport. */
+export function PaginatedPageLayout({ children, footer }: PaginatedPageLayoutProps) {
+  return (
+    <div className="flex min-h-full flex-1 flex-col">
+      {children}
+      {footer ? <div className="mt-auto w-full shrink-0 pt-6">{footer}</div> : null}
+    </div>
+  );
+}
+
+interface PaginationFooterProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function PaginationFooter({ children, className }: PaginationFooterProps) {
+  return (
+    <div
+      className={cn('overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60', className)}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface PaginationProps {
   page: number;
   pageSize: number;
@@ -169,6 +199,7 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
   pageSizeOptions?: number[];
+  itemLabel?: string;
 }
 
 export function Pagination({
@@ -178,6 +209,7 @@ export function Pagination({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions = [10, 25, 50],
+  itemLabel = 'posts',
 }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -200,7 +232,7 @@ export function Pagination({
       <p className="text-sm text-slate-400">
         Showing <span className="font-medium text-slate-200">{start}</span>-
         <span className="font-medium text-slate-200">{end}</span> of{' '}
-        <span className="font-medium text-slate-200">{totalItems}</span> posts
+        <span className="font-medium text-slate-200">{totalItems}</span> {itemLabel}
       </p>
 
       <div className="flex flex-wrap items-center gap-3">

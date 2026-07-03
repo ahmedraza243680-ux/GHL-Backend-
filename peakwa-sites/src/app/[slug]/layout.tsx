@@ -28,6 +28,7 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
       seo?.metaDescription ||
       site.description ||
       `Professional ${site.industry} services in ${site.city}, ${site.state}.`,
+    robots: { index: false, follow: false },
   };
 }
 

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import {
   createIndustrySchema,
   deleteIndustrySchema,
-  fetchIndustrySchemas,
+  fetchIndustrySchemasPaginated,
   updateIndustrySchema,
   type IndustrySchema,
   type IndustrySchemaPayload,
 } from '../api/endpoints';
-import { ErrorBanner, PageHeader, SuccessBanner } from '../components/ui';
+import { ErrorBanner, PageHeader, PaginatedPageLayout, Pagination, PaginationFooter, SuccessBanner } from '../components/ui';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +27,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { CardListSkeleton, TableSkeleton } from '../components/ui/skeleton';
+import { CardListSkeleton } from '../components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { cn } from '../lib/utils';
 import { formatDate } from '../utils/format';
 
@@ -58,9 +65,92 @@ const inputClass =
 const textareaClass =
   'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40';
 
+function SchemaCard({
+  schema,
+  onEdit,
+  onDelete,
+}: {
+  schema: IndustrySchema;
+  onEdit: (schema: IndustrySchema) => void;
+  onDelete: (schema: IndustrySchema) => void;
+}) {
+  return (
+    <div className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-white">{schema.displayName}</p>
+          <p className="mt-0.5 font-mono text-xs text-slate-500">{schema.industry}</p>
+        </div>
+        {schema.isDefault ? (
+          <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-500/30">
+            Default
+          </span>
+        ) : null}
+      </div>
+
+      <dl className="mb-5 flex-1 space-y-2.5 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Industry</dt>
+          <dd className="truncate font-mono text-xs text-slate-400">{schema.industry}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Display name</dt>
+          <dd className="text-right text-slate-300">{schema.displayName}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Default</dt>
+          <dd className="text-right text-slate-300">
+            {schema.isDefault ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-500/30">
+                Default
+              </span>
+            ) : (
+              <span className="text-slate-500">—</span>
+            )}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="shrink-0 text-slate-500">Created</dt>
+          <dd className="text-right text-slate-300">{formatDate(schema.createdAt)}</dd>
+        </div>
+      </dl>
+
+      <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 min-w-[7.5rem]"
+          onClick={() => onEdit(schema)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 min-w-[7.5rem] border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          onClick={() => onDelete(schema)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function IndustrySchemasPage() {
   const [schemas, setSchemas] = useState<IndustrySchema[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [defaultFilter, setDefaultFilter] = useState<'all' | 'default' | 'non-default'>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [totalItems, setTotalItems] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,18 +160,43 @@ export function IndustrySchemasPage() {
   const [deleteTarget, setDeleteTarget] = useState<IndustrySchema | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const loadSchemas = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchIndustrySchemas();
-      setSchemas(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load industry schemas');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadSchemas = useCallback(
+    async (pageOverride?: number) => {
+      const targetPage = pageOverride ?? page;
+      setLoading(true);
+      setError(null);
+      try {
+        const { schemas: data, pagination } = await fetchIndustrySchemasPaginated({
+          page: targetPage,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+          default: defaultFilter,
+        });
+        setSchemas(data);
+        setTotalItems(pagination.total);
+        if (targetPage > pagination.totalPages && pagination.totalPages > 0) {
+          setPage(pagination.totalPages);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load industry schemas');
+      } finally {
+        setLoading(false);
+        setInitialLoad(false);
+      }
+    },
+    [page, pageSize, debouncedSearch, defaultFilter],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, defaultFilter, pageSize]);
 
   useEffect(() => {
     void loadSchemas();
@@ -156,7 +271,12 @@ export function IndustrySchemasPage() {
       await deleteIndustrySchema(deleteTarget.id);
       setSuccess(`Schema "${deleteTarget.displayName}" deleted.`);
       setDeleteTarget(null);
-      await loadSchemas();
+      const nextPage = schemas.length === 1 && page > 1 ? page - 1 : page;
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await loadSchemas(nextPage);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete industry schema');
     } finally {
@@ -164,8 +284,28 @@ export function IndustrySchemasPage() {
     }
   }
 
+  const hasActiveFilters = debouncedSearch.length > 0 || defaultFilter !== 'all';
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+
   return (
-    <div>
+    <PaginatedPageLayout
+      footer={
+        !initialLoad && totalItems > 0 ? (
+          <PaginationFooter className={cn(loading && 'pointer-events-none opacity-60')}>
+            <Pagination
+              page={safePage}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              itemLabel="schemas"
+              pageSizeOptions={[6, 12, 24, 48]}
+              onPageChange={(nextPage) => setPage(nextPage)}
+              onPageSizeChange={(size) => setPageSize(size)}
+            />
+          </PaginationFooter>
+        ) : null
+      }
+    >
       <PageHeader
         title="Industry Schemas"
         description="Manage AI content schemas for each industry."
@@ -180,135 +320,83 @@ export function IndustrySchemasPage() {
       {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <SuccessBanner message={success} /> : null}
 
-      {loading ? (
-        <>
-          <CardListSkeleton count={4} />
-          <div className="mt-6 hidden lg:block">
-            <TableSkeleton rows={5} />
-          </div>
-        </>
-      ) : schemas.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center text-sm text-slate-500">
-          No industry schemas yet. Add one to get started.
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="relative w-full lg:max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search industry or display name…"
+            disabled={loading && initialLoad}
+            className={`${inputClass} pl-9`}
+          />
         </div>
-      ) : (
-        <>
-          <div className="space-y-4 lg:hidden">
-            {schemas.map((schema) => (
-              <div
-                key={schema.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-              >
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-white">{schema.displayName}</p>
-                    <p className="mt-0.5 font-mono text-xs text-slate-500">{schema.industry}</p>
-                  </div>
-                  {schema.isDefault ? (
-                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-500/30">
-                      Default
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mb-4 text-sm text-slate-400">{formatDate(schema.createdAt)}</p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => openEdit(schema)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                    onClick={() => setDeleteTarget(schema)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="text-sm text-slate-400" htmlFor="schema-default-filter">
+            Default
+          </label>
+          <Select
+            value={defaultFilter}
+            onValueChange={(value) =>
+              setDefaultFilter(value as 'all' | 'default' | 'non-default')
+            }
+            disabled={loading && initialLoad}
+          >
+            <SelectTrigger id="schema-default-filter" className="w-full sm:w-[180px]">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="default">Default only</SelectItem>
+              <SelectItem value="non-default">Non-default</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-slate-500">
+            {loading ? 'Loading…' : `${totalItems} schema${totalItems === 1 ? '' : 's'}`}
+          </p>
+        </div>
+      </div>
 
-          <div className="hidden lg:block">
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="min-w-[900px] w-full divide-y divide-slate-800">
-              <thead className="bg-slate-900/80">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Industry
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Display Name
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Default
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Created
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-400">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800 bg-slate-900/40">
-                {schemas.map((schema) => (
-                  <tr key={schema.id} className="hover:bg-slate-800/30">
-                    <td className="px-4 py-3 font-mono text-sm text-slate-300">
-                      {schema.industry}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-200">
-                      {schema.displayName}
-                    </td>
-                    <td className="px-4 py-3">
-                      {schema.isDefault ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-500/30">
-                          Default
-                        </span>
-                      ) : (
-                        <span className="text-sm text-slate-500">—</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-400">
-                      {formatDate(schema.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEdit(schema)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                          onClick={() => setDeleteTarget(schema)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="flex-1">
+      {loading && schemas.length === 0 ? (
+        <CardListSkeleton count={6} />
+      ) : (
+        <div className="relative min-h-[12rem]">
+          {loading ? (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-slate-950/70 backdrop-blur-[1px]"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                Loading schemas…
+              </div>
             </div>
-          </div>
-        </>
+          ) : null}
+
+          {schemas.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center text-sm text-slate-500">
+              {hasActiveFilters
+                ? 'No schemas match your filters.'
+                : 'No industry schemas yet. Add one to get started.'}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {schemas.map((schema) => (
+                <SchemaCard
+                  key={schema.id}
+                  schema={schema}
+                  onEdit={openEdit}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[min(90vh,100dvh)] max-w-2xl overflow-y-auto">
@@ -440,6 +528,6 @@ export function IndustrySchemasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PaginatedPageLayout>
   );
 }

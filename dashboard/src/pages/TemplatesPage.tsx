@@ -3,12 +3,12 @@ import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   createPhase4Template,
   deletePhase4Template,
-  fetchPhase4Templates,
+  fetchPhase4TemplatesPaginated,
   updatePhase4Template,
   type Phase4Template,
   type Phase4TemplatePayload,
 } from '../api/endpoints';
-import { ErrorBanner, PageHeader, SuccessBanner } from '../components/ui';
+import { ErrorBanner, PageHeader, PaginatedPageLayout, Pagination, PaginationFooter, SuccessBanner } from '../components/ui';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,6 +94,10 @@ const inputClass =
 export function TemplatesPage() {
   const [templates, setTemplates] = useState<Phase4Template[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [totalItems, setTotalItems] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -103,18 +107,34 @@ export function TemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Phase4Template | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const loadTemplates = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchPhase4Templates();
-      setTemplates(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load templates');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadTemplates = useCallback(
+    async (pageOverride?: number) => {
+      const targetPage = pageOverride ?? page;
+      setLoading(true);
+      setError(null);
+      try {
+        const { templates: data, pagination } = await fetchPhase4TemplatesPaginated({
+          page: targetPage,
+          limit: pageSize,
+        });
+        setTemplates(data);
+        setTotalItems(pagination.total);
+        if (targetPage > pagination.totalPages && pagination.totalPages > 0) {
+          setPage(pagination.totalPages);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load templates');
+      } finally {
+        setLoading(false);
+        setInitialLoad(false);
+      }
+    },
+    [page, pageSize],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   useEffect(() => {
     void loadTemplates();
@@ -178,7 +198,12 @@ export function TemplatesPage() {
       await deletePhase4Template(deleteTarget.id);
       setSuccess(`Template "${deleteTarget.name}" deactivated.`);
       setDeleteTarget(null);
-      await loadTemplates();
+      const nextPage = templates.length === 1 && page > 1 ? page - 1 : page;
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await loadTemplates(nextPage);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete template');
     } finally {
@@ -186,8 +211,27 @@ export function TemplatesPage() {
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+
   return (
-    <div>
+    <PaginatedPageLayout
+      footer={
+        !initialLoad && totalItems > 0 ? (
+          <PaginationFooter className={cn(loading && 'pointer-events-none opacity-60')}>
+            <Pagination
+              page={safePage}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              itemLabel="templates"
+              pageSizeOptions={[6, 12, 24, 48]}
+              onPageChange={(nextPage) => setPage(nextPage)}
+              onPageSizeChange={(size) => setPageSize(size)}
+            />
+          </PaginationFooter>
+        ) : null
+      }
+    >
       <PageHeader
         title="Templates"
         description="Manage website templates for AI-powered site generation."
@@ -202,15 +246,36 @@ export function TemplatesPage() {
       {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <SuccessBanner message={success} /> : null}
 
-      {loading ? (
+      <div className="mb-6 flex justify-end">
+        <p className="text-sm text-slate-400">
+          {loading ? 'Loading…' : `${totalItems} template${totalItems === 1 ? '' : 's'}`}
+        </p>
+      </div>
+
+      <div className="flex-1">
+      {loading && templates.length === 0 ? (
         <CardGridSkeleton count={6} />
       ) : templates.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-center text-sm text-slate-500">
           No templates yet. Add your first template to get started.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {templates.map((template) => (
+        <div className="relative min-h-[12rem]">
+          {loading ? (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-slate-950/70 backdrop-blur-[1px]"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                Loading templates…
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {templates.map((template) => (
             <Card key={template.id} className="flex flex-col overflow-hidden">
               {template.previewImage ? (
                 <div className="aspect-video w-full overflow-hidden border-b border-slate-800 bg-slate-950">
@@ -261,8 +326,10 @@ export function TemplatesPage() {
               </CardFooter>
             </Card>
           ))}
+          </div>
         </div>
       )}
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
@@ -385,6 +452,6 @@ export function TemplatesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PaginatedPageLayout>
   );
 }

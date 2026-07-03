@@ -14,7 +14,7 @@ export function Layout() {
         <AppSidebar className="h-full" />
       </aside>
 
-      <div className="flex min-h-full w-full flex-1 flex-col lg:pl-64">
+      <div className="flex min-h-screen w-full flex-1 flex-col lg:pl-64">
         <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur supports-[backdrop-filter]:bg-slate-950/80">
           <div className="flex items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
             <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
@@ -43,7 +43,7 @@ export function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <main className="flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>

@@ -298,11 +298,27 @@ export interface Phase4SiteUpdatePayload {
   status?: SiteStatus;
 }
 
+export async function fetchPhase4TemplatesPaginated(
+  query: { page?: number; limit?: number; search?: string } = {},
+): Promise<{ templates: Phase4Template[]; pagination: Phase4SitesPagination }> {
+  const { data } = await api.get<
+    ApiResponse<{ templates: Phase4Template[]; pagination: Phase4SitesPagination }>
+  >('/phase4/templates', {
+    params: {
+      page: query.page ?? 1,
+      limit: query.limit ?? 12,
+      ...(query.search ? { search: query.search } : {}),
+    },
+  });
+  return {
+    templates: data.data.templates,
+    pagination: data.data.pagination,
+  };
+}
+
 export async function fetchPhase4Templates(): Promise<Phase4Template[]> {
-  const { data } = await api.get<ApiResponse<{ templates: Phase4Template[] }>>(
-    '/phase4/templates',
-  );
-  return data.data.templates;
+  const { templates } = await fetchPhase4TemplatesPaginated({ page: 1, limit: 100 });
+  return templates;
 }
 
 export async function createPhase4Template(
@@ -333,11 +349,47 @@ export async function deletePhase4Template(id: string): Promise<Phase4Template> 
   return data.data.template;
 }
 
+export interface Phase4SitesPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface Phase4SitesQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: SiteStatus | '';
+}
+
+export interface PaginatedPhase4SitesResponse {
+  sites: Phase4GeneratedSite[];
+  pagination: Phase4SitesPagination;
+}
+
+export async function fetchPhase4SitesPaginated(
+  query: Phase4SitesQuery = {},
+): Promise<PaginatedPhase4SitesResponse> {
+  const { data } = await api.get<
+    ApiResponse<{ sites: Phase4GeneratedSite[]; pagination: Phase4SitesPagination }>
+  >('/phase4/sites', {
+    params: {
+      page: query.page ?? 1,
+      limit: query.limit ?? 12,
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.status ? { status: query.status } : {}),
+    },
+  });
+  return {
+    sites: data.data.sites,
+    pagination: data.data.pagination,
+  };
+}
+
 export async function fetchPhase4Sites(): Promise<Phase4GeneratedSite[]> {
-  const { data } = await api.get<ApiResponse<{ sites: Phase4GeneratedSite[] }>>(
-    '/phase4/sites',
-  );
-  return data.data.sites;
+  const { sites } = await fetchPhase4SitesPaginated({ page: 1, limit: 100 });
+  return sites;
 }
 
 export async function fetchPhase4Site(slug: string): Promise<Phase4GeneratedSite> {
@@ -439,11 +491,33 @@ export interface ContactSubmission {
   };
 }
 
+export async function fetchIndustrySchemasPaginated(
+  query: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    default?: 'all' | 'default' | 'non-default';
+  } = {},
+): Promise<{ schemas: IndustrySchema[]; pagination: Phase4SitesPagination }> {
+  const { data } = await api.get<
+    ApiResponse<{ schemas: IndustrySchema[]; pagination: Phase4SitesPagination }>
+  >('/phase4/industry-schemas', {
+    params: {
+      page: query.page ?? 1,
+      limit: query.limit ?? 12,
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.default && query.default !== 'all' ? { default: query.default } : {}),
+    },
+  });
+  return {
+    schemas: data.data.schemas,
+    pagination: data.data.pagination,
+  };
+}
+
 export async function fetchIndustrySchemas(): Promise<IndustrySchema[]> {
-  const { data } = await api.get<ApiResponse<{ schemas: IndustrySchema[] }>>(
-    '/phase4/industry-schemas',
-  );
-  return data.data.schemas;
+  const { schemas } = await fetchIndustrySchemasPaginated({ page: 1, limit: 100 });
+  return schemas;
 }
 
 export async function createIndustrySchema(
@@ -474,14 +548,35 @@ export async function deleteIndustrySchema(id: string): Promise<IndustrySchema> 
   return data.data.schema;
 }
 
+export async function fetchContactsPaginated(
+  query: { page?: number; limit?: number; search?: string } = {},
+): Promise<{
+  contacts: ContactSubmission[];
+  total: number;
+  pagination: Phase4SitesPagination;
+}> {
+  const { data } = await api.get<
+    ApiResponse<{
+      contacts: ContactSubmission[];
+      total: number;
+      pagination: Phase4SitesPagination;
+    }>
+  >('/phase4/contacts', {
+    params: {
+      page: query.page ?? 1,
+      limit: query.limit ?? 12,
+      ...(query.search ? { search: query.search } : {}),
+    },
+  });
+  return data.data;
+}
+
 export async function fetchAllContacts(): Promise<{
   contacts: ContactSubmission[];
   total: number;
 }> {
-  const { data } = await api.get<
-    ApiResponse<{ contacts: ContactSubmission[]; total: number }>
-  >('/phase4/contacts');
-  return data.data;
+  const { contacts, total } = await fetchContactsPaginated({ page: 1, limit: 100 });
+  return { contacts, total };
 }
 
 export async function fetchSiteContacts(slug: string): Promise<{

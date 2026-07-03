@@ -65,13 +65,26 @@ export function ListSkeleton({ count = 3 }: { count?: number }) {
 
 export function CardListSkeleton({ count = 3 }: { count?: number }) {
   return (
-    <div className="space-y-4 lg:hidden">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <Skeleton className="mb-3 h-4 w-32" />
-          <Skeleton className="mb-2 h-4 w-full" />
-          <Skeleton className="mb-4 h-24 w-full rounded-lg" />
-          <Skeleton className="h-9 w-full" />
+        <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+            <Skeleton className="h-6 w-16 rounded-full" />
+          </div>
+          <div className="mb-5 space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+          <div className="flex gap-2 border-t border-slate-800 pt-4">
+            <Skeleton className="h-9 flex-1" />
+            <Skeleton className="h-9 flex-1" />
+          </div>
         </div>
       ))}
     </div>

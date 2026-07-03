@@ -105,6 +105,19 @@ export function Footer({ site, theme }: FooterProps) {
       >
         © {new Date().getFullYear()} {site.businessName}. All rights reserved.
       </div>
+
+      <p className="pb-5 text-center text-gray-400" style={{ fontSize: '12px' }}>
+        Powered by{' '}
+        <a
+          href="https://peakwa.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition hover:opacity-80"
+          style={{ color: theme.accentColor }}
+        >
+          Peakwa
+        </a>
+      </p>
     </footer>
   );
 }
