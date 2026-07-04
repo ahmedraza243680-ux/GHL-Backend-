@@ -11,7 +11,7 @@ export default function PeakwaHomePage() {
         Powered by Peakwa
       </h1>
       <p className="mt-4 max-w-lg text-lg text-gray-600">
-        Business websites built automatically — premium, unique, and ready for your customers.
+        Business websites built automatically, premium, unique, and ready for your customers.
       </p>
     </main>
   );
