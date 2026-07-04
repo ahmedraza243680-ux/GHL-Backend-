@@ -1,7 +1,9 @@
+import './utils/logger.js';
 import { createApp } from './app.js';
 import { env, validateServerEnv } from './config/env.js';
 import prisma from './database/client.js';
 import { startScheduledJobs } from './jobs/index.js';
+import { logger } from './utils/logger.js';
 
 validateServerEnv();
 await prisma.$connect();
@@ -14,6 +16,7 @@ const server = app.listen(env.PORT, () => {
       event: 'server_listen',
       port: env.PORT,
       environment: env.NODE_ENV,
+      logFile: logger.filePath,
     }),
   );
   startScheduledJobs();

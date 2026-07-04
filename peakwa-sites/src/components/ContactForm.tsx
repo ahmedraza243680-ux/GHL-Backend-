@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2, X } from 'lucide-react';
+import { API_URL } from '@/src/config/config';
 import type { GeneratedSite } from '@/src/lib/types';
 import { getTextColor, resolveTheme } from '@/src/lib/theme';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 type ToastState = {
   type: 'success' | 'error';

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { SITE_BASE_URL } from '@/src/config/config';
 import { getSiteBySlug } from '@/src/lib/api';
 
 type SitemapProps = {
@@ -10,7 +11,7 @@ export default async function sitemap({ params }: SitemapProps): Promise<Metadat
   const site = await getSiteBySlug(slug);
   if (!site) return [];
 
-  const baseUrl = `${process.env.NEXT_PUBLIC_SITE_BASE_URL || 'https://site.peakwa.com'}/${slug}`;
+  const baseUrl = `${SITE_BASE_URL.replace(/\/$/, '')}/${slug}`;
   const lastModified = new Date(
     (site as { updatedAt?: string }).updatedAt ?? Date.now(),
   );
