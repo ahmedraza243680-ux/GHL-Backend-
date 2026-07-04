@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { API_URL } from '../config/config';
 
 export interface ApiErrorBody {
   success?: boolean;
@@ -7,7 +8,7 @@ export interface ApiErrorBody {
 }
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: API_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

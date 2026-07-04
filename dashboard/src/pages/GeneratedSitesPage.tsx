@@ -44,19 +44,17 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { CardListSkeleton } from '../components/ui/skeleton';
+import { SITE_BASE_URL } from '../config/config';
 import { cn } from '../lib/utils';
 import { formatDate } from '../utils/format';
 
 type SiteTab = 'home' | 'about' | 'services' | 'contact' | 'blog' | 'locations' | 'contacts';
 type EditTab = 'business' | 'colors' | 'regenerate' | 'status';
 
-const SITE_BASE_URL = String(import.meta.env.VITE_SITE_BASE_URL || 'http://localhost:3000').replace(
-  /\/$/,
-  '',
-);
+const SITE_URL = SITE_BASE_URL.replace(/\/$/, '');
 
 function openSitePreview(slug: string) {
-  window.open(`${SITE_BASE_URL}/${slug}`, '_blank', 'noopener,noreferrer');
+  window.open(`${SITE_URL}/${slug}`, '_blank', 'noopener,noreferrer');
 }
 
 type SiteExtraFields = {
