@@ -81,12 +81,16 @@ export async function listGoogleAccountsForLocation(locationId) {
 }
 
 /**
- * Parse `accounts/{accountId}/locations/{locationId}` → locationId suffix.
+ * Extract location ID from Google resource name (last path segment).
+ * e.g. accounts/123/locations/456 → 456, or locations/456 → 456
  */
 function locationResourceToId(resourceName) {
   if (!resourceName || typeof resourceName !== 'string') return null;
-  const match = resourceName.match(/\/locations\/([^/]+)$/);
-  return match?.[1] ?? null;
+  const trimmed = resourceName.trim().replace(/\/+$/, '');
+  const lastSlash = trimmed.lastIndexOf('/');
+  if (lastSlash === -1) return trimmed || null;
+  const id = trimmed.slice(lastSlash + 1);
+  return id || null;
 }
 
 function normalizeAccountId(accountId) {

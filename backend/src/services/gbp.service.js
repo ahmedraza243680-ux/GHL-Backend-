@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { google } from 'googleapis';
 import { env } from '../config/env.js';
 import prisma from '../database/client.js';
@@ -14,7 +13,15 @@ export const MOCK_GBP_LOCATION_PROFILE = {
   hours: 'Mon-Fri 9am-6pm',
 };
 
-const LOCAL_POSTS_V4 = 'https://mybusiness.googleapis.com/v4';
+/**
+ * GBP Local Posts API — Google's current API for creating posts (2025/2026).
+ * Not part of Business Information API; uses the dedicated Local Posts surface.
+ * @see https://developers.google.com/my-business/reference/rest/v4/accounts.locations.localPosts/create
+ */
+const LOCAL_POSTS_API_BASE = 'https://mybusiness.googleapis.com/v4';
+const LOCAL_POSTS_GCP_SERVICE = 'mybusiness.googleapis.com';
+
+const TOKEN_REFRESH_BUFFER_MS = 60_000;
 
 function resolveAccountId(location) {
   const accountId = location.googleAccountId?.trim() || env.GOOGLE_GBP_ACCOUNT_ID;
@@ -40,6 +47,95 @@ function resolveLocationResourceId(location) {
   return id;
 }
 
+function buildLocationParent(accountId, googleLocationId) {
+  return `accounts/${accountId}/locations/${googleLocationId}`;
+}
+
+function extractGoogleApiError(error) {
+  const details = error?.response?.data ?? error?.errors ?? error?.data;
+  const message =
+    details?.error?.message ||
+    error?.errors?.[0]?.message ||
+    error?.message ||
+    'Unknown error';
+  const status = error?.response?.status ?? error?.code;
+  return { message, details, status };
+}
+
+function formatLocalPostApiError(message, details) {
+  const lower = String(message).toLowerCase();
+  if (
+    lower.includes('has not been used') ||
+    lower.includes('is disabled') ||
+    lower.includes('not been enabled')
+  ) {
+    return (
+      `Google Business Profile Local Posts API (${LOCAL_POSTS_GCP_SERVICE}) is not enabled for this GCP project. ` +
+      'Enable the "Google My Business API" in Google Cloud Console (visible after GBP API access approval). ' +
+      `Details: ${message}`
+    );
+  }
+  if (lower.includes('permission denied') || lower.includes('insufficient')) {
+    return (
+      `Google Business Profile Local Posts API permission denied. Confirm GBP API access is approved, ` +
+      `"Google My Business API" is enabled, and the OAuth user manages this location. Details: ${message}`
+    );
+  }
+  return `Google Local Posts API failed: ${message}`;
+}
+
+/**
+ * OAuth2 client with refreshed access token persisted when expired.
+ */
+async function createOAuth2ForLocation(location) {
+  if (!location.googleAccessToken) {
+    throw new AppError('Google is not connected for this location.', 400, {
+      code: 'GOOGLE_NOT_CONNECTED',
+    });
+  }
+
+  const oauth2 = createOAuth2Client();
+  oauth2.setCredentials({
+    access_token: location.googleAccessToken,
+    refresh_token: location.googleRefreshToken ?? undefined,
+    expiry_date: location.googleTokenExpiresAt?.getTime(),
+  });
+
+  const needsRefresh =
+    location.googleRefreshToken &&
+    (!location.googleTokenExpiresAt ||
+      location.googleTokenExpiresAt.getTime() <= Date.now() + TOKEN_REFRESH_BUFFER_MS);
+
+  if (needsRefresh) {
+    try {
+      const { credentials } = await oauth2.refreshAccessToken();
+      if (credentials.access_token) {
+        await prisma.location.update({
+          where: { id: location.id },
+          data: {
+            googleAccessToken: credentials.access_token,
+            ...(credentials.refresh_token
+              ? { googleRefreshToken: credentials.refresh_token }
+              : {}),
+            ...(credentials.expiry_date
+              ? { googleTokenExpiresAt: new Date(credentials.expiry_date) }
+              : { googleTokenExpiresAt: null }),
+          },
+        });
+        oauth2.setCredentials(credentials);
+      }
+    } catch (e) {
+      const { message } = extractGoogleApiError(e);
+      throw new AppError(`Failed to refresh Google access token: ${message}`, 401, {
+        code: 'GOOGLE_TOKEN_REFRESH_FAILED',
+        details: e?.response?.data ?? e?.message,
+      });
+    }
+  }
+
+  return oauth2;
+}
+
 /**
  * Fetch Business Profile location details via Business Information API.
  * When MOCK_MODE is enabled, returns static mock data (location must exist).
@@ -54,24 +150,10 @@ export async function fetchGbpLocationDetails(locationId) {
     return { ...MOCK_GBP_LOCATION_PROFILE };
   }
 
-  if (!location.googleAccessToken) {
-    throw new AppError('Google is not connected for this location.', 400, {
-      code: 'GOOGLE_NOT_CONNECTED',
-    });
-  }
-
   const accountId = resolveAccountId(location);
   const gLocationId = resolveLocationResourceId(location);
-  const name = `accounts/${accountId}/locations/${gLocationId}`;
-
-  const oauth2 = createOAuth2Client();
-  oauth2.setCredentials({
-    access_token: location.googleAccessToken,
-    ...(location.googleRefreshToken
-      ? { refresh_token: location.googleRefreshToken }
-      : {}),
-  });
-
+  const name = buildLocationParent(accountId, gLocationId);
+  const oauth2 = await createOAuth2ForLocation(location);
   const businessInfo = google.mybusinessbusinessinformation({ version: 'v1', auth: oauth2 });
 
   try {
@@ -106,15 +188,13 @@ export async function fetchGbpLocationDetails(locationId) {
       openInfo: data.openInfo,
     };
   } catch (e) {
-    const status = e.code;
-    const apiMessage =
-      e.response?.data?.error?.message || e.errors?.[0]?.message || e.message;
+    const { message, details, status } = extractGoogleApiError(e);
     throw new AppError(
-      `Google Business Profile API error: ${apiMessage ?? 'Unknown error'}`,
+      `Google Business Profile API error: ${message}`,
       status === 404 ? 404 : 502,
       {
         code: 'GBP_API_ERROR',
-        details: e.response?.data ?? e.errors,
+        details,
       },
     );
   }
@@ -138,7 +218,7 @@ function buildLocalPostBody(type, content, mediaUrl) {
     ? [{ mediaFormat: 'PHOTO', sourceUrl: mediaUrl }]
     : undefined;
   const base = {
-    languageCode: 'en',
+    languageCode: 'en-US',
     summary: content,
     ...(media ? { media } : {}),
   };
@@ -161,9 +241,9 @@ function buildLocalPostBody(type, content, mediaUrl) {
         title: content.slice(0, 100),
         schedule: {
           startDate,
-          startTime: { hours: 9, minutes: 0 },
+          startTime: { hours: 9, minutes: 0, seconds: 0, nanos: 0 },
           endDate: startDate,
-          endTime: { hours: 17, minutes: 0 },
+          endTime: { hours: 17, minutes: 0, seconds: 0, nanos: 0 },
         },
       },
     };
@@ -184,7 +264,8 @@ function buildLocalPostBody(type, content, mediaUrl) {
 }
 
 /**
- * Creates a local post via legacy v4 My Business API (requires GBP API access).
+ * Creates a local post via the GBP Local Posts API
+ * (accounts.locations.localPosts.create on mybusiness.googleapis.com/v4).
  */
 export async function publishLocalPostToGoogle(location, { type, content, mediaUrl }) {
   if (!location.googleAccessToken) {
@@ -205,35 +286,31 @@ export async function publishLocalPostToGoogle(location, { type, content, mediaU
     throw new AppError('Invalid post type.', 400, { code: 'INVALID_POST_TYPE' });
   }
 
-  const url = `${LOCAL_POSTS_V4}/accounts/${encodeURIComponent(accountId)}/locations/${encodeURIComponent(gLocationId)}/localPosts`;
+  const parent = buildLocationParent(accountId, gLocationId);
+  const oauth2 = await createOAuth2ForLocation(location);
 
   try {
-    const response = await axios.post(url, requestBody, {
+    const response = await oauth2.request({
+      url: `${LOCAL_POSTS_API_BASE}/${parent}/localPosts`,
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${location.googleAccessToken}`,
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
-      validateStatus: () => true,
+      data: requestBody,
     });
-
-    if (response.status < 200 || response.status >= 300) {
-      const msg =
-        response.data?.error?.message ||
-        response.data?.error?.status ||
-        `HTTP ${response.status}`;
-      throw new AppError(`Google local post API failed: ${msg}`, 502, {
-        code: 'GBP_LOCAL_POST_ERROR',
-        details: response.data,
-      });
-    }
 
     return response.data;
   } catch (e) {
-    if (e instanceof AppError) throw e;
-    throw new AppError(`Google local post request failed: ${e.message}`, 502, {
+    const { message, details, status } = extractGoogleApiError(e);
+    throw new AppError(formatLocalPostApiError(message, details), status === 404 ? 404 : 502, {
       code: 'GBP_LOCAL_POST_ERROR',
-      details: e.response?.data,
+      details: {
+        api: 'accounts.locations.localPosts.create',
+        service: LOCAL_POSTS_GCP_SERVICE,
+        parent,
+        googleError: details,
+      },
     });
   }
 }
