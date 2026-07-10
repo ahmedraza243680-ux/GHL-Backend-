@@ -147,6 +147,14 @@ export default async function BlogPostPage({ params }: PageProps) {
             ]}
           />
 
+          <Link
+            href={`/${slug}/blog`}
+            className="mb-6 inline-flex text-sm font-semibold"
+            style={{ color: theme.accentColor }}
+          >
+            ← Back to blog
+          </Link>
+
           {blogImage ? (
             <div className="relative mb-8 h-[400px] w-full overflow-hidden rounded-2xl">
               <SiteImage
@@ -215,14 +223,6 @@ export default async function BlogPostPage({ params }: PageProps) {
               </div>
             </section>
           ) : null}
-
-          <Link
-            href={`/${slug}/blog`}
-            className="inline-flex text-sm font-semibold"
-            style={{ color: theme.accentColor }}
-          >
-            ← Back to blog
-          </Link>
         </div>
       </SectionWrapper>
     </>

@@ -29,6 +29,9 @@ export type GeneratedSite = {
   fontStyle: string;
   theme: SiteTheme;
   locationPages?: LocationPage[];
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  websiteUrl?: string | null;
 };
 
 export type LocationPage = {

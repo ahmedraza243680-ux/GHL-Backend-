@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SITE_BASE_URL } from '@/src/config/config';
-import { Phone } from 'lucide-react';
+import { ArrowRight, Phone, Quote, Star } from 'lucide-react';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { LocalBusinessSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
@@ -39,6 +39,71 @@ function colorWithOpacity(hex: string, opacity: number) {
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
+function hashString(value: string): number {
+  return value.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+}
+
+function trustedSinceYear(industry: string): number {
+  const years = [2005, 2007, 2009, 2011, 2013, 2015, 2017];
+  return years[hashString(industry) % years.length]!;
+}
+
+function customersServedLabel(slug: string): string {
+  return hashString(slug) % 2 === 0 ? '1000+' : '500+';
+}
+
+function getNearbyAreas(city: string, state: string): string[] {
+  const njAreas = [
+    'Newark',
+    'Jersey City',
+    'Paterson',
+    'Elizabeth',
+    'Edison',
+    'Woodbridge',
+    'Lakewood',
+    'Toms River',
+    'Hamilton',
+    'Trenton',
+  ];
+  const normalizedState = state.trim().toLowerCase();
+  if (normalizedState === 'nj' || normalizedState === 'new jersey') {
+    return njAreas.filter((area) => area.toLowerCase() !== city.toLowerCase()).slice(0, 6);
+  }
+  return [
+    `Greater ${city}`,
+    `North ${city}`,
+    `South ${city}`,
+    `East ${city}`,
+    `West ${city}`,
+    `${state} Metro`,
+  ];
+}
+
+function buildTestimonials(businessName: string, city: string, industry: string) {
+  const names = ['Michael R.', 'Sarah T.', 'David K.'];
+  const reviews = [
+    `${businessName} exceeded our expectations. Their ${industry} team was professional, on time, and left everything spotless. We will definitely use them again in ${city}.`,
+    `We called ${businessName} for help and they responded quickly. Fair pricing, honest advice, and quality work — exactly what you want from a local ${city} business.`,
+    `Outstanding service from start to finish. ${businessName} explained every step clearly and delivered great results. Highly recommend to anyone in ${city} and nearby areas.`,
+  ];
+  return names.map((name, i) => ({ name, review: reviews[i]! }));
+}
+
+const processSteps = [
+  {
+    title: 'Contact Us',
+    description: 'Reach out by phone or our contact form. We respond quickly and schedule a convenient time.',
+  },
+  {
+    title: 'We Assess Your Needs',
+    description: 'Our team evaluates your situation, answers questions, and provides a clear plan tailored to you.',
+  },
+  {
+    title: 'We Deliver Results',
+    description: 'We complete the work on schedule with quality you can count on and follow up to ensure satisfaction.',
+  },
+];
+
 export default async function HomePage({ params }: PageProps) {
   const { slug } = await params;
   const site = await getSiteBySlug(slug);
@@ -53,6 +118,31 @@ export default async function HomePage({ params }: PageProps) {
   const homeServices = services.length > 6 ? services.slice(0, 6) : services;
   const whyChooseUs = content.whyChooseUs ?? [];
   const cta = content.cta ?? {};
+  const trustedYear = trustedSinceYear(site.industry);
+  const customersLabel = customersServedLabel(site.slug);
+  const serviceCount = services.length || 6;
+  const nearbyAreas = getNearbyAreas(site.city, site.state);
+  const testimonials = buildTestimonials(site.businessName, site.city, site.industry);
+
+  const stats = [
+    {
+      value: String(trustedYear),
+      label: `${site.city} Trusted Since`,
+    },
+    {
+      value: customersLabel,
+      label: 'Customers Served',
+    },
+    {
+      value: String(serviceCount),
+      label: 'Services Offered',
+    },
+    {
+      value: '5.0',
+      label: 'Customer Rating',
+      showStar: true,
+    },
+  ];
 
   const heroDark = theme.heroStyle === 'dark';
   const heroBg = heroDark
@@ -270,6 +360,128 @@ export default async function HomePage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </SectionWrapper>
+
+      <SectionWrapper background="#fff" className="py-20">
+        <div className="grid grid-cols-2 divide-x divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 md:grid-cols-4 md:divide-y-0">
+          {stats.map((stat, i) => (
+            <div
+              key={`${stat.label}-${i}`}
+              className="flex flex-col items-center justify-center px-4 py-10 text-center md:py-12"
+            >
+              <div className="flex items-center gap-1">
+                <span
+                  className="text-4xl font-bold md:text-5xl"
+                  style={{ color: theme.primaryColor }}
+                >
+                  {stat.value}
+                </span>
+                {stat.showStar ? (
+                  <Star
+                    className="h-7 w-7 fill-current"
+                    style={{ color: theme.primaryColor }}
+                  />
+                ) : null}
+              </div>
+              <p className="mt-3 text-sm font-medium text-gray-500 md:text-base">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </SectionWrapper>
+
+      <SectionWrapper background={theme.secondaryColor} className="py-20">
+        <div className="mb-12 text-center">
+          <h2 className="text-3xl font-bold text-gray-900">How It Works</h2>
+          <p className="mt-3 text-lg text-gray-600">Our simple three-step process</p>
+        </div>
+        <div className="grid gap-10 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-start md:gap-6">
+          {processSteps.map((step, i) => (
+            <div key={step.title} className="contents">
+              <div className="flex flex-col items-center text-center">
+                <div
+                  className="flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold text-white"
+                  style={{ backgroundColor: theme.accentColor }}
+                >
+                  {i + 1}
+                </div>
+                <h3 className="mt-5 text-xl font-bold text-gray-900">{step.title}</h3>
+                <p className="mt-3 max-w-xs text-gray-600">{step.description}</p>
+              </div>
+              {i < processSteps.length - 1 ? (
+                <div className="hidden items-center justify-center md:flex">
+                  <ArrowRight className="h-8 w-8 text-gray-400" />
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </SectionWrapper>
+
+      <SectionWrapper background="#fff" className="py-20">
+        <div className="mb-12 text-center">
+          <h2 className="text-3xl font-bold text-gray-900">What Our Customers Say</h2>
+          <p className="mt-3 text-lg text-gray-600">
+            Trusted by homeowners and businesses across {site.city}
+          </p>
+        </div>
+        <div className="grid gap-8 md:grid-cols-3">
+          {testimonials.map((testimonial) => (
+            <article
+              key={testimonial.name}
+              className="relative rounded-2xl bg-white p-8 shadow-lg"
+            >
+              <Quote
+                className="mb-4 h-8 w-8"
+                style={{ color: theme.accentColor }}
+              />
+              <div className="mb-4 flex gap-1">
+                {Array.from({ length: 5 }).map((_, starIndex) => (
+                  <Star
+                    key={starIndex}
+                    className="h-4 w-4 fill-current text-amber-400"
+                  />
+                ))}
+              </div>
+              <p className="leading-relaxed text-gray-600">{testimonial.review}</p>
+              <p className="mt-6 font-semibold text-gray-900">{testimonial.name}</p>
+            </article>
+          ))}
+        </div>
+      </SectionWrapper>
+
+      <SectionWrapper
+        background={theme.secondaryColor}
+        className="py-20"
+        style={{ borderBottom: `1px solid ${colorWithOpacity(theme.primaryColor, 0.12)}` }}
+      >
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl font-bold text-gray-900">
+            Serving {site.city} and Surrounding Areas
+          </h2>
+          <div
+            className="mx-auto mt-4 h-1 w-16 rounded-full"
+            style={{ backgroundColor: theme.accentColor }}
+          />
+          <p className="mt-6 text-lg leading-relaxed text-gray-600">
+            {site.businessName} is proud to serve {site.city}, {site.state} and the surrounding
+            communities. As a local {site.industry} provider, we understand the needs of our
+            neighbors and are committed to reliable, friendly service right in your backyard.
+          </p>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            {nearbyAreas.map((area) => (
+              <span
+                key={area}
+                className="rounded-full border bg-white px-4 py-2 text-sm font-medium shadow-sm"
+                style={{
+                  borderColor: colorWithOpacity(theme.primaryColor, 0.2),
+                  color: theme.primaryColor,
+                }}
+              >
+                {area}
+              </span>
             ))}
           </div>
         </div>
