@@ -173,6 +173,7 @@ export default async function HomePage({ params }: PageProps) {
                 fill
                 className="object-cover"
                 priority
+                sizes="100vw"
                 fallback={
                   <div className="h-full w-full" style={{ background: heroBg }} />
                 }
@@ -240,6 +241,7 @@ export default async function HomePage({ params }: PageProps) {
                 alt={`About ${site.businessName}`}
                 fill
                 className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
                 fallback={
                   <div
                     className="h-full w-full"
@@ -308,6 +310,7 @@ export default async function HomePage({ params }: PageProps) {
                     alt={`${service.title} service`}
                     fill
                     className="object-cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     fallback={
                       <div
                         className="flex h-full items-center justify-center"

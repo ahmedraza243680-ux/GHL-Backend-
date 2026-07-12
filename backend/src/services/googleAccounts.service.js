@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import prisma from '../database/client.js';
 import { AppError } from '../utils/AppError.js';
-import { createOAuth2Client } from './googleAuth.service.js';
+import { withGoogleAuth } from './googleAuth.service.js';
 
 /**
  * Parse `accounts/{accountId}` → accountId.
@@ -48,24 +48,19 @@ export async function listGoogleAccountsForLocation(locationId) {
     });
   }
 
-  const oauth2 = createOAuth2Client();
-  oauth2.setCredentials({
-    access_token: location.googleAccessToken,
-    ...(location.googleRefreshToken
-      ? { refresh_token: location.googleRefreshToken }
-      : {}),
-  });
-
   try {
-    const raw = await fetchAllAccounts(oauth2);
-    return raw.map((a) => {
-      const accountId = accountResourceToId(a.name ?? '');
-      return {
-        accountId,
-        name: a.accountName ?? a.name ?? null,
-      };
+    return await withGoogleAuth(locationId, async (oauth2) => {
+      const raw = await fetchAllAccounts(oauth2);
+      return raw.map((a) => {
+        const accountId = accountResourceToId(a.name ?? '');
+        return {
+          accountId,
+          name: a.accountName ?? a.name ?? null,
+        };
+      });
     });
   } catch (e) {
+    if (e instanceof AppError) throw e;
     const status = e.code;
     const apiMessage =
       e.response?.data?.error?.message || e.errors?.[0]?.message || e.message;
@@ -143,22 +138,17 @@ export async function listGoogleLocationsForAccount(locationId, accountId) {
     });
   }
 
-  const oauth2 = createOAuth2Client();
-  oauth2.setCredentials({
-    access_token: location.googleAccessToken,
-    ...(location.googleRefreshToken
-      ? { refresh_token: location.googleRefreshToken }
-      : {}),
-  });
-
   try {
-    const raw = await fetchAllLocationsForAccount(oauth2, normalizedAccountId);
-    return raw.map((loc) => ({
-      name: loc.name ?? null,
-      title: loc.title ?? null,
-      locationId: locationResourceToId(loc.name ?? ''),
-    }));
+    return await withGoogleAuth(locationId, async (oauth2) => {
+      const raw = await fetchAllLocationsForAccount(oauth2, normalizedAccountId);
+      return raw.map((loc) => ({
+        name: loc.name ?? null,
+        title: loc.title ?? null,
+        locationId: locationResourceToId(loc.name ?? ''),
+      }));
+    });
   } catch (e) {
+    if (e instanceof AppError) throw e;
     const status = e.code;
     const apiMessage =
       e.response?.data?.error?.message || e.errors?.[0]?.message || e.message;

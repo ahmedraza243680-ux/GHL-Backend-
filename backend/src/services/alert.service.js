@@ -81,4 +81,78 @@ export async function sendFailureAlert(locationId, businessName, error) {
   return info;
 }
 
+const GOOGLE_CONNECTION_ALERT_EMAIL = 'ahmedrazagithub@gmail.com';
+
+/**
+ * Sends an alert when a location's Google OAuth refresh token is invalid or expired.
+ */
+export async function sendGoogleConnectionLostAlert(locationId, businessName, error) {
+  const timestamp = new Date().toISOString();
+  const subject = `Google Connection Lost - ${businessName}`;
+  const text = [
+    'A location lost its Google Business Profile connection and needs to be reconnected.',
+    '',
+    `Location ID: ${locationId}`,
+    `Business: ${businessName}`,
+    `Error: ${error}`,
+    `Timestamp: ${timestamp}`,
+    '',
+    'Action required: Re-run Google OAuth for this location via GET /auth/google/url?state={locationId}',
+  ].join('\n');
+
+  if (env.MOCK_MODE) {
+    console.info(
+      JSON.stringify({
+        event: 'google_connection_lost_alert_mock',
+        locationId,
+        businessName,
+        error,
+        timestamp,
+        subject,
+        to: GOOGLE_CONNECTION_ALERT_EMAIL,
+      }),
+    );
+    return { mock: true };
+  }
+
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS || !env.ALERT_EMAIL_FROM) {
+    console.warn(
+      JSON.stringify({
+        event: 'google_connection_lost_alert_skipped',
+        reason: 'SMTP or alert email env not configured',
+        locationId,
+        businessName,
+        error,
+        to: GOOGLE_CONNECTION_ALERT_EMAIL,
+      }),
+    );
+    return { skipped: true };
+  }
+
+  const recipients = [GOOGLE_CONNECTION_ALERT_EMAIL];
+  if (env.ALERT_EMAIL_TO && !recipients.includes(env.ALERT_EMAIL_TO)) {
+    recipients.push(env.ALERT_EMAIL_TO);
+  }
+
+  const transporter = createTransporter();
+  const info = await transporter.sendMail({
+    from: env.ALERT_EMAIL_FROM,
+    to: recipients.join(', '),
+    subject,
+    text,
+  });
+
+  console.info(
+    JSON.stringify({
+      event: 'google_connection_lost_alert_sent',
+      locationId,
+      businessName,
+      messageId: info.messageId,
+      to: recipients,
+    }),
+  );
+
+  return info;
+}
+
 export { sleep, RETRY_DELAYS_MS };

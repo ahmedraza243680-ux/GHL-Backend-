@@ -80,6 +80,7 @@ export default async function AboutPage({ params }: PageProps) {
                 alt={`${site.businessName} team and story`}
                 fill
                 className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
                 fallback={
                   <div
                     className="h-full w-full"

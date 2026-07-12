@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { SITE_BASE_URL } from '@/src/config/config';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
@@ -11,7 +13,7 @@ import { getSiteBySlug } from '@/src/lib/api';
 import { parseJson, type ServicesContent } from '@/src/lib/content';
 import { getIcon } from '@/src/lib/iconMap';
 import { getSiteImages } from '@/src/lib/images';
-import { hexToRgb, resolveTheme } from '@/src/lib/theme';
+import { getTextColor, hexToRgb, resolveTheme } from '@/src/lib/theme';
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -89,6 +91,7 @@ export default async function ServicesPage({ params }: PageProps) {
                       alt={`${service.title} service`}
                       fill
                       className="object-cover"
+                      sizes="(max-width: 1024px) 100vw, 50vw"
                       fallback={
                         <div
                           className="flex h-full flex-col items-center justify-center gap-4"
@@ -141,9 +144,26 @@ export default async function ServicesPage({ params }: PageProps) {
                 >
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <h2 className="mt-2 text-3xl font-bold text-gray-900">{service.title}</h2>
+                <h2 className="mt-2 text-3xl font-bold text-gray-900">
+                  <Link
+                    href={`/${slug}/services/${slugify(service.title || `service-${i}`)}`}
+                    className="transition hover:opacity-80"
+                  >
+                    {service.title}
+                  </Link>
+                </h2>
                 <p className="mt-3 text-lg font-medium text-gray-700">{service.shortDescription}</p>
                 <p className="mt-4 leading-relaxed text-gray-600">{service.fullDescription}</p>
+                <Link
+                  href={`/${slug}/services/${slugify(service.title || `service-${i}`)}`}
+                  className="mt-6 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition hover:opacity-90"
+                  style={{
+                    backgroundColor: theme.accentColor,
+                    color: getTextColor(theme.accentColor),
+                  }}
+                >
+                  Read More <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
             </article>
           ))}

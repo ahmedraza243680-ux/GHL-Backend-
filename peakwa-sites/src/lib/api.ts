@@ -1,13 +1,12 @@
 import { API_URL } from '@/src/config/config';
 import type { GeneratedSite, LocationPage } from './types';
 
-const fetchOptions =
-  process.env.NODE_ENV === 'development'
-    ? { cache: 'no-store' as const }
-    : { next: { revalidate: 3600 } };
+const fetchOptions = { next: { revalidate: 3600 } };
 
 export async function getSiteBySlug(slug: string): Promise<GeneratedSite | null> {
-  const res = await fetch(`${API_URL}/phase4/sites/${encodeURIComponent(slug)}`, fetchOptions);
+  const res = await fetch(`${API_URL}/phase4/sites/${encodeURIComponent(slug)}`, {
+    next: { revalidate: 3600 },
+  });
   if (!res.ok) return null;
   const data = await res.json();
   return data.data?.site || null;

@@ -60,6 +60,7 @@ function PostCard({
             alt={`${post.title} blog post`}
             fill
             className="object-cover"
+            sizes="(max-width: 768px) 100vw, 50vw"
             fallback={
               <div
                 className="h-full w-full"
@@ -138,7 +139,7 @@ export default async function BlogPage({ params }: PageProps) {
                   alt={`${featured.title} featured post`}
                   fill
                   className="object-cover"
-                  priority
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                   fallback={
                     <div
                       className="h-full w-full"

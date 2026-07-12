@@ -3,10 +3,11 @@ import { notFound } from 'next/navigation';
 import { Navbar } from '@/src/components/Navbar';
 import { Footer } from '@/src/components/Footer';
 import { BackToTop } from '@/src/components/BackToTop';
-import { getLocationPages, getSiteBySlug } from '@/src/lib/api';
+import { API_URL } from '@/src/config/config';
+import { getLocationPages } from '@/src/lib/api';
+import type { GeneratedSite } from '@/src/lib/types';
 import { parseJson, type ServicesContent } from '@/src/lib/content';
 import { resolveTheme } from '@/src/lib/theme';
-import type { SiteTheme } from '@/src/lib/types';
 import clsx from 'clsx';
 
 type LayoutProps = {
@@ -14,9 +15,18 @@ type LayoutProps = {
   params: Promise<{ slug: string }>;
 };
 
+async function fetchSiteBySlug(slug: string): Promise<GeneratedSite | null> {
+  const res = await fetch(`${API_URL}/phase4/sites/${encodeURIComponent(slug)}`, {
+    next: { revalidate: 3600 },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.data?.site ?? null;
+}
+
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
   const { slug } = await params;
-  const site = await getSiteBySlug(slug);
+  const site = await fetchSiteBySlug(slug);
   if (!site) return { title: 'Site Not Found' };
 
   return {
@@ -27,7 +37,7 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
 
 export default async function SiteLayout({ children, params }: LayoutProps) {
   const { slug } = await params;
-  const site = await getSiteBySlug(slug);
+  const site = await fetchSiteBySlug(slug);
   if (!site) notFound();
 
   const locations = await getLocationPages(slug);

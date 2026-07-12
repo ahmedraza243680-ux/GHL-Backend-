@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { env } from '../config/env.js';
 import prisma from '../database/client.js';
-import { exchangeCodeAndSaveTokens, getGoogleConsentUrl, refreshAccessTokenForLocation } from '../services/googleAuth.service.js';
+import { exchangeCodeAndSaveTokens, getGoogleConsentUrl, getAuthenticatedOAuth2Client, refreshAccessTokenForLocation } from '../services/googleAuth.service.js';
 import { listGoogleAccountsForLocation, listGoogleLocationsForAccount } from '../services/googleAccounts.service.js';
 import { AppError } from '../utils/AppError.js';
 import jwt from 'jsonwebtoken';
@@ -122,9 +122,12 @@ export async function getGoogleDebugAccounts(req, res, next) {
       params.parentAccount = req.query.parentAccount;
     }
 
+    const { oauth2 } = await getAuthenticatedOAuth2Client(locationId);
+    const accessToken = oauth2.credentials.access_token;
+
     const response = await axios.get(DEBUG_GBP_ACCOUNTS_URL, {
       headers: {
-        Authorization: `Bearer ${location.googleAccessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
       },
       params,

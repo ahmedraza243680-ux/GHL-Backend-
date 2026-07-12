@@ -81,7 +81,7 @@ export function Navbar({ site, theme, servicesContent, locations }: NavbarProps)
                     {dropdownServices.map((s) => (
                       <Link
                         key={s.title}
-                        href={`${base}/services#${slugify(s.title || '')}`}
+                        href={`${base}/services/${slugify(s.title || '')}`}
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
                         {s.title}
@@ -196,7 +196,7 @@ export function Navbar({ site, theme, servicesContent, locations }: NavbarProps)
                 {dropdownServices.map((s) => (
                   <Link
                     key={s.title}
-                    href={`${base}/services#${slugify(s.title || '')}`}
+                    href={`${base}/services/${slugify(s.title || '')}`}
                     className="rounded-lg px-6 py-2 text-sm text-gray-600"
                     onClick={() => setOpen(false)}
                   >

@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import { env } from '../config/env.js';
 import prisma from '../database/client.js';
 import { AppError } from '../utils/AppError.js';
-import { createOAuth2Client } from './googleAuth.service.js';
+import { withGoogleAuth } from './googleAuth.service.js';
 
 export const MOCK_GBP_LOCATION_PROFILE = {
   locationName: 'Bergen Car Company',
@@ -20,8 +20,6 @@ export const MOCK_GBP_LOCATION_PROFILE = {
  */
 const LOCAL_POSTS_API_BASE = 'https://mybusiness.googleapis.com/v4';
 const LOCAL_POSTS_GCP_SERVICE = 'mybusiness.googleapis.com';
-
-const TOKEN_REFRESH_BUFFER_MS = 60_000;
 
 function resolveAccountId(location) {
   const accountId = location.googleAccountId?.trim() || env.GOOGLE_GBP_ACCOUNT_ID;
@@ -85,58 +83,6 @@ function formatLocalPostApiError(message, details) {
 }
 
 /**
- * OAuth2 client with refreshed access token persisted when expired.
- */
-async function createOAuth2ForLocation(location) {
-  if (!location.googleAccessToken) {
-    throw new AppError('Google is not connected for this location.', 400, {
-      code: 'GOOGLE_NOT_CONNECTED',
-    });
-  }
-
-  const oauth2 = createOAuth2Client();
-  oauth2.setCredentials({
-    access_token: location.googleAccessToken,
-    refresh_token: location.googleRefreshToken ?? undefined,
-    expiry_date: location.googleTokenExpiresAt?.getTime(),
-  });
-
-  const needsRefresh =
-    location.googleRefreshToken &&
-    (!location.googleTokenExpiresAt ||
-      location.googleTokenExpiresAt.getTime() <= Date.now() + TOKEN_REFRESH_BUFFER_MS);
-
-  if (needsRefresh) {
-    try {
-      const { credentials } = await oauth2.refreshAccessToken();
-      if (credentials.access_token) {
-        await prisma.location.update({
-          where: { id: location.id },
-          data: {
-            googleAccessToken: credentials.access_token,
-            ...(credentials.refresh_token
-              ? { googleRefreshToken: credentials.refresh_token }
-              : {}),
-            ...(credentials.expiry_date
-              ? { googleTokenExpiresAt: new Date(credentials.expiry_date) }
-              : { googleTokenExpiresAt: null }),
-          },
-        });
-        oauth2.setCredentials(credentials);
-      }
-    } catch (e) {
-      const { message } = extractGoogleApiError(e);
-      throw new AppError(`Failed to refresh Google access token: ${message}`, 401, {
-        code: 'GOOGLE_TOKEN_REFRESH_FAILED',
-        details: e?.response?.data ?? e?.message,
-      });
-    }
-  }
-
-  return oauth2;
-}
-
-/**
  * Fetch Business Profile location details via Business Information API.
  * When MOCK_MODE is enabled, returns static mock data (location must exist).
  */
@@ -153,40 +99,41 @@ export async function fetchGbpLocationDetails(locationId) {
   const accountId = resolveAccountId(location);
   const gLocationId = resolveLocationResourceId(location);
   const name = buildLocationParent(accountId, gLocationId);
-  const oauth2 = await createOAuth2ForLocation(location);
-  const businessInfo = google.mybusinessbusinessinformation({ version: 'v1', auth: oauth2 });
 
   try {
-    const { data } = await businessInfo.accounts.locations.get({
-      name,
-      readMask: [
-        'name',
-        'title',
-        'languageCode',
-        'categories',
-        'storefrontAddress',
-        'phoneNumbers',
-        'websiteUri',
-        'regularHours',
-        'specialHours',
-        'profile',
-        'openInfo',
-      ].join(','),
-    });
+    return await withGoogleAuth(locationId, async (oauth2) => {
+      const businessInfo = google.mybusinessbusinessinformation({ version: 'v1', auth: oauth2 });
+      const { data } = await businessInfo.accounts.locations.get({
+        name,
+        readMask: [
+          'name',
+          'title',
+          'languageCode',
+          'categories',
+          'storefrontAddress',
+          'phoneNumbers',
+          'websiteUri',
+          'regularHours',
+          'specialHours',
+          'profile',
+          'openInfo',
+        ].join(','),
+      });
 
-    return {
-      name: data.name,
-      title: data.title,
-      languageCode: data.languageCode,
-      categories: data.categories,
-      storefrontAddress: data.storefrontAddress,
-      phoneNumbers: data.phoneNumbers,
-      websiteUri: data.websiteUri,
-      regularHours: data.regularHours,
-      specialHours: data.specialHours,
-      profile: data.profile,
-      openInfo: data.openInfo,
-    };
+      return {
+        name: data.name,
+        title: data.title,
+        languageCode: data.languageCode,
+        categories: data.categories,
+        storefrontAddress: data.storefrontAddress,
+        phoneNumbers: data.phoneNumbers,
+        websiteUri: data.websiteUri,
+        regularHours: data.regularHours,
+        specialHours: data.specialHours,
+        profile: data.profile,
+        openInfo: data.openInfo,
+      };
+    });
   } catch (e) {
     const { message, details, status } = extractGoogleApiError(e);
     throw new AppError(
@@ -287,20 +234,21 @@ export async function publishLocalPostToGoogle(location, { type, content, mediaU
   }
 
   const parent = buildLocationParent(accountId, gLocationId);
-  const oauth2 = await createOAuth2ForLocation(location);
 
   try {
-    const response = await oauth2.request({
-      url: `${LOCAL_POSTS_API_BASE}/${parent}/localPosts`,
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      data: requestBody,
-    });
+    return await withGoogleAuth(location.id, async (oauth2) => {
+      const response = await oauth2.request({
+        url: `${LOCAL_POSTS_API_BASE}/${parent}/localPosts`,
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        data: requestBody,
+      });
 
-    return response.data;
+      return response.data;
+    });
   } catch (e) {
     const { message, details, status } = extractGoogleApiError(e);
     throw new AppError(formatLocalPostApiError(message, details), status === 404 ? 404 : 502, {

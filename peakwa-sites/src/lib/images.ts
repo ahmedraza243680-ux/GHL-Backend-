@@ -17,7 +17,7 @@ const emptyImages: SiteImages = {
 export async function getSiteImages(slug: string): Promise<SiteImages> {
   try {
     const res = await fetch(`${API_URL}/phase4/sites/${encodeURIComponent(slug)}/images`, {
-      next: { revalidate: 0 },
+      next: { revalidate: 86400 },
     });
     if (!res.ok) return emptyImages;
     const data = await res.json();
