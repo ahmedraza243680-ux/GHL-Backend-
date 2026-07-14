@@ -28,3 +28,13 @@ export async function getLocationPages(slug: string): Promise<LocationPage[]> {
   const data = await res.json();
   return data.data?.pages || [];
 }
+
+export async function getServicePageContent(slug: string, serviceSlug: string) {
+  const res = await fetch(
+    `${API_URL}/phase4/sites/${encodeURIComponent(slug)}/services/${encodeURIComponent(serviceSlug)}`,
+    { next: { revalidate: 86400 } },
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.data?.content || null;
+}

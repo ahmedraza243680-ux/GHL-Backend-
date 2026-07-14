@@ -10,6 +10,7 @@ import { getSiteBySlug } from '@/src/lib/api';
 import { parseJson, type ContactContent } from '@/src/lib/content';
 import { getSiteImages } from '@/src/lib/images';
 import { getTextColor, resolveTheme } from '@/src/lib/theme';
+import type { GeneratedSite } from '@/src/lib/types';
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -39,6 +40,11 @@ export default async function ContactPage({ params }: PageProps) {
   const images = await getSiteImages(slug);
   const content = parseJson<ContactContent>(site.contactContent, {});
   const theme = resolveTheme(site);
+
+  // `address` isn't in the shared GeneratedSite type yet, but the API does return it.
+  const siteAddress = (site as GeneratedSite & { address?: string | null }).address ?? '';
+  const mapQuery = encodeURIComponent(`${siteAddress} ${site.city} ${site.state}`.trim());
+  const mapSrc = `https://maps.google.com/maps?q=${mapQuery}&output=embed`;
 
   return (
     <>
@@ -95,27 +101,35 @@ export default async function ContactPage({ params }: PageProps) {
       </SectionWrapper>
 
       <SectionWrapper background={theme.secondaryColor} className="py-20">
-        <div
-          className="flex flex-col items-center justify-center rounded-3xl px-6 py-16 text-center"
-          style={{
-            backgroundColor: '#f3f4f6',
-            backgroundImage:
-              'linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-          }}
-        >
-          <MapPin className="h-12 w-12" style={{ color: theme.accentColor }} />
-          <p className="mt-4 text-lg font-semibold text-gray-800">
+        <div className="flex flex-col items-center text-center">
+          <MapPin className="h-10 w-10" style={{ color: theme.accentColor }} />
+          <p className="mt-3 text-lg font-semibold text-gray-800">
             {site.city}, {site.state}
           </p>
           <p className="mt-2 max-w-md text-sm text-gray-600">
             {content.addressSection?.heading || `Visit ${site.businessName} in ${site.city}`}
           </p>
+        </div>
+
+        <div className="mt-8 h-64 w-full overflow-hidden rounded-xl border border-gray-200">
+          <iframe
+            src={mapSrc}
+            width="100%"
+            height="100%"
+            style={{ border: 0 }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            title={`${site.businessName} location map`}
+          />
+        </div>
+
+        <div className="mt-6 text-center">
           <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${site.city}, ${site.state}`)}`}
+            href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-8 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold shadow-md transition hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold shadow-md transition hover:opacity-90"
             style={{
               backgroundColor: theme.accentColor,
               color: getTextColor(theme.accentColor),
