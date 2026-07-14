@@ -6,7 +6,6 @@ import { startScheduledJobs } from './jobs/index.js';
 import { logger } from './utils/logger.js';
 
 validateServerEnv();
-await prisma.$connect();
 
 const app = createApp();
 
@@ -21,6 +20,44 @@ const server = app.listen(env.PORT, () => {
   );
   startScheduledJobs();
 });
+
+// Neon suspends the compute when idle, so the first connect after a cold start
+// can take seconds or fail outright with P1001. Prisma connects lazily on the
+// first query anyway, so warm the pool in the background: the port stays open
+// while the database wakes up, and a transient failure never kills the process.
+const MAX_CONNECT_ATTEMPTS = 6;
+
+async function connectToDatabase(attempt = 1) {
+  try {
+    await prisma.$connect();
+    console.info(JSON.stringify({ event: 'database_connected', attempt }));
+  } catch (error) {
+    if (attempt >= MAX_CONNECT_ATTEMPTS) {
+      console.error(
+        JSON.stringify({
+          event: 'database_connect_failed',
+          attempt,
+          code: error?.errorCode ?? null,
+          error: error?.message,
+        }),
+      );
+      return;
+    }
+
+    const delayMs = Math.min(1000 * 2 ** (attempt - 1), 10_000);
+    console.warn(
+      JSON.stringify({
+        event: 'database_connect_retry',
+        attempt,
+        delayMs,
+        code: error?.errorCode ?? null,
+      }),
+    );
+    setTimeout(() => void connectToDatabase(attempt + 1), delayMs).unref();
+  }
+}
+
+void connectToDatabase();
 
 async function shutdown(signal) {
   console.info(JSON.stringify({ event: 'shutdown', signal }));
