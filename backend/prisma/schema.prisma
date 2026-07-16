@@ -67,6 +67,11 @@ model Location {
   googleAccessToken  String?
   googleRefreshToken String?
   googleTokenExpiresAt DateTime?
+  /// Per-location OFFER post config. When couponCode is null, no coupon is sent
+  /// (it is optional in Google's Local Posts API) so we never fabricate a code.
+  offerCouponCode    String?
+  offerTerms         String?
+  offerRedeemUrl     String?
   createdAt          DateTime         @default(now())
   posts              Post[]
   media              Media[]

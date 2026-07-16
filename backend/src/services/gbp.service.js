@@ -160,7 +160,13 @@ function mapPostTypeToGoogleTopic(type) {
   }
 }
 
-function buildLocalPostBody(type, content, mediaUrl) {
+/**
+ * @param {'UPDATE'|'EVENT'|'OFFER'} type
+ * @param {string} content
+ * @param {string|null} mediaUrl
+ * @param {{ offer?: { couponCode?: string|null, terms?: string|null, redeemUrl?: string|null } }} [options]
+ */
+function buildLocalPostBody(type, content, mediaUrl, options = {}) {
   const media = mediaUrl
     ? [{ mediaFormat: 'PHOTO', sourceUrl: mediaUrl }]
     : undefined;
@@ -175,17 +181,12 @@ function buildLocalPostBody(type, content, mediaUrl) {
   }
 
   if (type === 'EVENT') {
-    const d = new Date();
-    const startDate = {
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-      day: d.getDate(),
-    };
+    const startDate = toGoogleDate(new Date());
     return {
       ...base,
       topicType: 'EVENT',
       event: {
-        title: content.slice(0, 100),
+        title: buildEventTitle(content),
         schedule: {
           startDate,
           startTime: { hours: 9, minutes: 0, seconds: 0, nanos: 0 },
@@ -197,17 +198,74 @@ function buildLocalPostBody(type, content, mediaUrl) {
   }
 
   if (type === 'OFFER') {
+    // Google requires `event` (title + schedule) for OFFER posts, not just EVENT.
+    // The schedule defines the offer's validity window; default it to 30 days.
+    const now = new Date();
+    const end = new Date(now);
+    end.setDate(end.getDate() + 30);
     return {
       ...base,
       topicType: 'OFFER',
-      offer: {
-        couponCode: 'PROMO',
-        termsConditions: 'See store for details.',
+      event: {
+        title: buildEventTitle(content),
+        schedule: {
+          startDate: toGoogleDate(now),
+          startTime: { hours: 0, minutes: 0, seconds: 0, nanos: 0 },
+          endDate: toGoogleDate(end),
+          endTime: { hours: 23, minutes: 59, seconds: 0, nanos: 0 },
+        },
       },
+      offer: buildOfferDetails(options.offer),
     };
   }
 
   return null;
+}
+
+/**
+ * Builds the OFFER `offer` object from a location's saved config. couponCode and
+ * redeemOnlineUrl are only sent when the business has actually provided them —
+ * both are optional in Google's API, so we never fabricate a coupon. termsConditions
+ * falls back to a safe generic string when not configured.
+ */
+function buildOfferDetails(offer = {}) {
+  const couponCode = String(offer?.couponCode ?? '').trim();
+  const redeemUrl = String(offer?.redeemUrl ?? '').trim();
+  const terms = String(offer?.terms ?? '').trim();
+  return {
+    ...(couponCode ? { couponCode } : {}),
+    ...(redeemUrl ? { redeemOnlineUrl: redeemUrl } : {}),
+    termsConditions: terms || 'See store for details.',
+  };
+}
+
+function toGoogleDate(date) {
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+  };
+}
+
+// Google caps EVENT/OFFER post titles at 58 characters. Prefer the first
+// sentence of the post as the headline; fall back to a word-boundary trim so
+// the title reads cleanly and never exceeds the limit.
+const EVENT_TITLE_MAX = 58;
+
+function buildEventTitle(content) {
+  const text = String(content ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return 'Update';
+  if (text.length <= EVENT_TITLE_MAX) return text;
+
+  // First sentence, if it fits comfortably.
+  const sentenceEnd = text.search(/[.!?]\s/);
+  if (sentenceEnd > 0 && sentenceEnd + 1 <= EVENT_TITLE_MAX) {
+    return text.slice(0, sentenceEnd).trim();
+  }
+
+  const cut = text.slice(0, EVENT_TITLE_MAX);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 30 ? cut.slice(0, lastSpace) : cut).trim();
 }
 
 /**
@@ -228,7 +286,13 @@ export async function publishLocalPostToGoogle(location, { type, content, mediaU
     throw new AppError('Invalid post type.', 400, { code: 'INVALID_POST_TYPE' });
   }
 
-  const requestBody = buildLocalPostBody(type, content, mediaUrl);
+  const requestBody = buildLocalPostBody(type, content, mediaUrl, {
+    offer: {
+      couponCode: location.offerCouponCode,
+      terms: location.offerTerms,
+      redeemUrl: location.offerRedeemUrl,
+    },
+  });
   if (!requestBody) {
     throw new AppError('Invalid post type.', 400, { code: 'INVALID_POST_TYPE' });
   }

@@ -118,6 +118,30 @@ function getCTA(businessType, primaryKeyword, city) {
   return `Call us today for ${primaryKeyword} in ${city}.`;
 }
 
+/**
+ * Per-post-type angle so an OFFER reads like an offer and an EVENT like an event.
+ * We never invent a specific discount amount or coupon — those come from the
+ * location's saved offer config — so the copy stays honest on real listings.
+ */
+function getPostTypeAngle(postType) {
+  const type = String(postType ?? 'UPDATE').toUpperCase();
+  if (type === 'OFFER') {
+    return {
+      angle:
+        'Frame this as a current special or limited-time savings the business is running right now. Invite people to ask about the current deal. Do NOT invent a specific percentage, dollar amount, or coupon code.',
+      cta: 'Contact us to take advantage of our current offer',
+    };
+  }
+  if (type === 'EVENT') {
+    return {
+      angle:
+        'Frame this around an upcoming happening — a seasonal push, an open house, or a reason to stop by soon. Keep it inviting and time-relevant. Do NOT invent a specific date or time.',
+      cta: 'Stop by or reach out to join us',
+    };
+  }
+  return { angle: '', cta: '' };
+}
+
 function pickTemplate(recentContents, businessName, keyword, city, cta) {
   const drafts = DRAFT_TEMPLATES.map((fn) => `${fn(businessName, keyword, city)} ${cta}`);
   const recentText = recentContents.join(' ').toLowerCase();
@@ -208,7 +232,8 @@ export async function generatePostContent(
   const businessType = getBusinessType(categoryLabel);
   const businessFocus = getBusinessFocus(categoryLabel);
   const primaryKeyword = getPrimaryKeyword(categoryLabel);
-  const cta = getCTA(businessType, primaryKeyword, locationCity);
+  const typeAngle = getPostTypeAngle(postType);
+  const cta = typeAngle.cta || getCTA(businessType, primaryKeyword, locationCity);
 
   const draft = pickTemplate(recentContents, name, primaryKeyword, locationCity, cta);
 
@@ -234,7 +259,7 @@ export async function generatePostContent(
 Today is ${currentDayOfWeek} in ${currentMonth}. Post number ${dayOfYear}. Variation seed ${variationSeed}.
 
 Business focus for this post: ${businessFocus}
-
+${typeAngle.angle ? `\nPost type angle (${String(postType).toUpperCase()}): ${typeAngle.angle}\n` : ''}
 RECENT POSTS ALREADY WRITTEN — DO NOT REPEAT ANY OF THESE OPENINGS, THEMES, STRUCTURES OR IDEAS:
 ${recentPostsSummary}
 
