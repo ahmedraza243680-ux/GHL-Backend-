@@ -12,7 +12,9 @@ import {
   listLocationsSummary,
   publishLocationPost,
   rejectLocationPost,
+  updateLocationOfferConfig,
   updateLocationPost,
+  updateLocationServiceTowns,
   uploadLocationMedia,
 } from '../controllers/locations.controller.js';
 import { parseMediaMultipart } from '../middleware/mediaUpload.js';
@@ -24,6 +26,8 @@ router.get('/', asyncHandler(listLocations));
 router.get('/summary', asyncHandler(listLocationsSummary));
 router.get('/pending-posts', asyncHandler(listAllPendingPosts));
 router.get('/:locationId/gbp', asyncHandler(getLocationGbp));
+router.patch('/:locationId/service-towns', asyncHandler(updateLocationServiceTowns));
+router.patch('/:locationId/offer-config', asyncHandler(updateLocationOfferConfig));
 router.get('/:locationId/media', asyncHandler(listLocationMedia));
 router.post(
   '/:locationId/media/upload',

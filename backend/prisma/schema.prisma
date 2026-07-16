@@ -72,6 +72,10 @@ model Location {
   offerCouponCode    String?
   offerTerms         String?
   offerRedeemUrl     String?
+  /// Towns/cities in this location's service area. Posts pick a random one per
+  /// generation instead of always using the location's home city. Empty/unset
+  /// falls back to the home city.
+  serviceAreaTowns   String[]         @default([])
   createdAt          DateTime         @default(now())
   posts              Post[]
   media              Media[]

@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import {
   fetchLocationSchedule,
+  updateLocationOfferConfig,
   updateLocationSchedule,
+  updateLocationServiceTowns,
   type LocationSchedulePayload,
+  type OfferConfigPayload,
 } from '../api/endpoints';
 import {
   ErrorBanner,
@@ -40,13 +44,14 @@ const WEEKDAYS = [
   'Sunday',
 ];
 
-const ROTATION_TYPES = ['UPDATE', 'OFFER', 'EVENT', 'VIDEO'] as const;
+const ROTATION_TYPES = ['UPDATE', 'OFFER', 'EVENT', 'VIDEO', 'INFORMATIONAL'] as const;
 
 const POST_TYPE_INFO: Record<string, { label: string }> = {
   UPDATE: { label: 'General update' },
   OFFER: { label: 'Special offer' },
   EVENT: { label: 'Event' },
   VIDEO: { label: 'Video post' },
+  INFORMATIONAL: { label: 'Informational post' },
 };
 
 function postTimeToParts(postTime: string): TimeParts {
@@ -308,6 +313,151 @@ function PerDayScheduleTable({
   );
 }
 
+function TownsSection({
+  towns,
+  inputValue,
+  disabled,
+  onInputChange,
+  onAdd,
+  onRemove,
+  onSave,
+  saving,
+}: {
+  towns: string[];
+  inputValue: string;
+  disabled?: boolean;
+  onInputChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (town: string) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <input
+          type="text"
+          value={inputValue}
+          disabled={disabled}
+          placeholder="Add a town, e.g. Hackensack"
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onAdd();
+            }
+          }}
+          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40 sm:max-w-sm"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled || !inputValue.trim()}
+          onClick={onAdd}
+          className="shrink-0"
+        >
+          <Plus className="mr-1.5 h-4 w-4" />
+          Add town
+        </Button>
+      </div>
+
+      {towns.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-700 px-4 py-6 text-center text-sm text-slate-500">
+          No service area towns set. Posts will use the location&apos;s home city.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {towns.map((town) => (
+            <span
+              key={town}
+              className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 py-1 pl-3 pr-1.5 text-xs font-medium text-slate-200 ring-1 ring-inset ring-slate-700"
+            >
+              {town}
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onRemove(town)}
+                className="rounded-full p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-100 disabled:pointer-events-none"
+                aria-label={`Remove ${town}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Button type="button" size="sm" disabled={disabled} onClick={onSave}>
+        {saving ? 'Saving…' : 'Save towns'}
+      </Button>
+    </div>
+  );
+}
+
+const offerInputClass =
+  'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40';
+
+function OfferSettingsSection({
+  form,
+  disabled,
+  onChange,
+  onSave,
+  saving,
+}: {
+  form: OfferConfigPayload;
+  disabled?: boolean;
+  onChange: (patch: Partial<OfferConfigPayload>) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-slate-400">Coupon Code</label>
+          <input
+            type="text"
+            value={form.couponCode}
+            disabled={disabled}
+            placeholder="e.g. SAVE20"
+            onChange={(e) => onChange({ couponCode: e.target.value })}
+            className={offerInputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-slate-400">
+            Terms and Conditions
+          </label>
+          <input
+            type="text"
+            value={form.terms}
+            disabled={disabled}
+            placeholder="e.g. New customers only. Expires 12/31."
+            onChange={(e) => onChange({ terms: e.target.value })}
+            className={offerInputClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-slate-400">Redeem URL</label>
+          <input
+            type="text"
+            value={form.redeemUrl}
+            disabled={disabled}
+            placeholder="https://example.com/offer"
+            onChange={(e) => onChange({ redeemUrl: e.target.value })}
+            className={offerInputClass}
+          />
+        </div>
+      </div>
+
+      <Button type="button" size="sm" disabled={disabled} onClick={onSave}>
+        {saving ? 'Saving…' : 'Save offer settings'}
+      </Button>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { locations, loading: locationsLoading } = useLocations();
   const [forms, setForms] = useState<Record<string, LocationScheduleForm>>({});
@@ -315,6 +465,43 @@ export function SettingsPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const [townForms, setTownForms] = useState<Record<string, string[]>>({});
+  const [newTownInputs, setNewTownInputs] = useState<Record<string, string>>({});
+  const [townsSavingId, setTownsSavingId] = useState<string | null>(null);
+
+  const [offerForms, setOfferForms] = useState<Record<string, OfferConfigPayload>>({});
+  const [offerSavingId, setOfferSavingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTownForms((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const loc of locations) {
+        if (!(loc.id in next)) {
+          next[loc.id] = [...(loc.serviceAreaTowns ?? [])];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    setOfferForms((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const loc of locations) {
+        if (!(loc.id in next)) {
+          next[loc.id] = {
+            couponCode: loc.offerCouponCode ?? '',
+            terms: loc.offerTerms ?? '',
+            redeemUrl: loc.offerRedeemUrl ?? '',
+          };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [locations]);
 
   const loadSchedules = useCallback(async () => {
     if (locations.length === 0) return;
@@ -347,6 +534,73 @@ export function SettingsPage() {
       if (!current) return prev;
       return { ...prev, [locationId]: { ...current, ...patch } };
     });
+  }
+
+  function addTown(locationId: string) {
+    const value = (newTownInputs[locationId] ?? '').trim();
+    if (!value) return;
+
+    setTownForms((prev) => {
+      const current = prev[locationId] ?? [];
+      if (current.some((t) => t.toLowerCase() === value.toLowerCase())) return prev;
+      return { ...prev, [locationId]: [...current, value] };
+    });
+    setNewTownInputs((prev) => ({ ...prev, [locationId]: '' }));
+  }
+
+  function removeTown(locationId: string, town: string) {
+    setTownForms((prev) => ({
+      ...prev,
+      [locationId]: (prev[locationId] ?? []).filter((t) => t !== town),
+    }));
+  }
+
+  async function handleSaveTowns(locationId: string, businessName: string) {
+    const towns = townForms[locationId] ?? [];
+    setTownsSavingId(locationId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const saved = await updateLocationServiceTowns(locationId, towns);
+      setTownForms((prev) => ({ ...prev, [locationId]: saved }));
+      setSuccess(`Service towns saved for ${businessName}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save service towns');
+    } finally {
+      setTownsSavingId(null);
+    }
+  }
+
+  function patchOfferForm(locationId: string, patch: Partial<OfferConfigPayload>) {
+    setOfferForms((prev) => {
+      const current = prev[locationId] ?? { couponCode: '', terms: '', redeemUrl: '' };
+      return { ...prev, [locationId]: { ...current, ...patch } };
+    });
+  }
+
+  async function handleSaveOfferConfig(locationId: string, businessName: string) {
+    const form = offerForms[locationId] ?? { couponCode: '', terms: '', redeemUrl: '' };
+    setOfferSavingId(locationId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const saved = await updateLocationOfferConfig(locationId, form);
+      setOfferForms((prev) => ({
+        ...prev,
+        [locationId]: {
+          couponCode: saved.offerCouponCode ?? '',
+          terms: saved.offerTerms ?? '',
+          redeemUrl: saved.offerRedeemUrl ?? '',
+        },
+      }));
+      setSuccess(`Offer settings saved for ${businessName}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save offer settings');
+    } finally {
+      setOfferSavingId(null);
+    }
   }
 
   function syncDayMaps(current: LocationScheduleForm, postDays: string[]) {
@@ -564,6 +818,37 @@ export function SettingsPage() {
                       onDayTimeChange={(day, time) => setDayPostTime(loc.id, day, time)}
                       onApplySameTime={(time) => applySameTimeToAllDays(loc.id, time)}
                       onRotateTypes={() => rotateTypesForDays(loc.id)}
+                    />
+                  </SettingsField>
+
+                  <SettingsField
+                    label="Towns"
+                    hint="Posts pick a random town from this list. Empty falls back to the location's home city."
+                  >
+                    <TownsSection
+                      towns={townForms[loc.id] ?? []}
+                      inputValue={newTownInputs[loc.id] ?? ''}
+                      disabled={townsSavingId === loc.id}
+                      onInputChange={(value) =>
+                        setNewTownInputs((prev) => ({ ...prev, [loc.id]: value }))
+                      }
+                      onAdd={() => addTown(loc.id)}
+                      onRemove={(town) => removeTown(loc.id, town)}
+                      onSave={() => void handleSaveTowns(loc.id, loc.businessName)}
+                      saving={townsSavingId === loc.id}
+                    />
+                  </SettingsField>
+
+                  <SettingsField
+                    label="Offer Settings"
+                    hint="Used on OFFER posts. Leave blank to omit — a coupon or URL is never fabricated."
+                  >
+                    <OfferSettingsSection
+                      form={offerForms[loc.id] ?? { couponCode: '', terms: '', redeemUrl: '' }}
+                      disabled={offerSavingId === loc.id}
+                      onChange={(patch) => patchOfferForm(loc.id, patch)}
+                      onSave={() => void handleSaveOfferConfig(loc.id, loc.businessName)}
+                      saving={offerSavingId === loc.id}
                     />
                   </SettingsField>
                 </CardContent>

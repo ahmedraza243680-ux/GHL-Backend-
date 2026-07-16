@@ -52,19 +52,39 @@ const DRAFT_TEMPLATES = [
 const CATEGORY_FOCUS_MAP = [
   {
     match: /hvac|heating|cooling|air condition/i,
-    keywords: [
-      'AC repair',
-      'furnace repair',
-      'HVAC service',
-      'air conditioning installation',
-      'heating repair',
-    ],
+    seasonal: true,
     type: 'service',
+    informationalTopics: [
+      'signs your AC needs servicing',
+      'how to lower energy bills this summer',
+      'when to replace vs repair your AC',
+    ],
   },
   {
     match: /car|auto|vehicle|dealer/i,
     keywords: ['used cars', 'auto sales', 'vehicle financing', 'car dealership', 'test drive'],
     type: 'retail',
+    informationalTopics: [
+      'what to look for when buying a used car',
+      'how to get the best financing rate',
+      'questions to ask before buying',
+    ],
+  },
+  {
+    match: /internet marketing/i,
+    keywords: [
+      'digital marketing',
+      'SEO services',
+      'web design',
+      'lead generation',
+      'business growth',
+    ],
+    type: 'service',
+    informationalTopics: [
+      'how to improve your Google ranking',
+      'why local SEO matters',
+      'how to get more reviews',
+    ],
   },
   {
     match: /marketing|seo|digital|media/i,
@@ -76,6 +96,11 @@ const CATEGORY_FOCUS_MAP = [
       'business growth',
     ],
     type: 'service',
+    informationalTopics: [
+      'how to improve your Google ranking',
+      'why local SEO matters',
+      'how to get more reviews',
+    ],
   },
   {
     match: /consulting|business service|solutions/i,
@@ -95,15 +120,50 @@ function getCategoryEntry(category) {
   return CATEGORY_FOCUS_MAP.find((entry) => entry.match.test(cat)) ?? null;
 }
 
-function getBusinessFocus(category) {
+/** Month (0-11, per Date#getMonth) -> season name. October (9) is its own short "fall" window. */
+function getSeasonName(month) {
+  if ([5, 6, 7, 8].includes(month)) return 'summer';
+  if ([10, 11, 0, 1].includes(month)) return 'winter';
+  if ([2, 3, 4].includes(month)) return 'spring';
+  return 'fall';
+}
+
+const HVAC_SEASONAL_KEYWORDS = {
+  summer: ['AC repair', 'air conditioning', 'cooling', 'AC tune-up', 'central air', 'AC installation'],
+  winter: ['furnace repair', 'heating repair', 'boiler service', 'heat pump', 'heating installation'],
+  spring: ['AC maintenance', 'system checkup', 'seasonal tune-up', 'HVAC inspection'],
+  fall: ['heating tune-up', 'furnace checkup', 'heat pump service', 'heating inspection'],
+};
+
+const SEASON_WEATHER_CONTEXT = {
+  summer: 'hot summer weather with high heat and humidity',
+  winter: 'cold winter weather with freezing temperatures',
+  spring: 'mild spring weather with fluctuating temperatures',
+  fall: 'cool fall weather as temperatures start dropping',
+};
+
+/**
+ * Keyword list for a category, adjusted for the current season when the
+ * category is HVAC (seasonal: true in CATEGORY_FOCUS_MAP) so a business never
+ * gets told to talk about furnaces in July or AC installs in January. All
+ * other business types keep the same fixed keyword list year round.
+ */
+export function getSeasonalKeywords(category, month = new Date().getMonth()) {
   const entry = getCategoryEntry(category);
-  if (entry) return entry.keywords.join(', ');
+  if (!entry) return null;
+  if (entry.seasonal) return HVAC_SEASONAL_KEYWORDS[getSeasonName(month)];
+  return entry.keywords;
+}
+
+function getBusinessFocus(category) {
+  const keywords = getSeasonalKeywords(category);
+  if (keywords) return keywords.join(', ');
   return String(category ?? '').trim() || 'local business services';
 }
 
 function getPrimaryKeyword(category) {
-  const entry = getCategoryEntry(category);
-  if (entry) return entry.keywords[0];
+  const keywords = getSeasonalKeywords(category);
+  if (keywords) return keywords[0];
   return String(category ?? '').trim() || 'our services';
 }
 
@@ -118,12 +178,42 @@ function getCTA(businessType, primaryKeyword, city) {
   return `Call us today for ${primaryKeyword} in ${city}.`;
 }
 
+const HVAC_SEASON_AVOID = {
+  summer: 'furnaces, heating, boilers, or winter heating topics',
+  winter: 'AC, air conditioning, or cooling topics',
+  spring: 'peak-summer AC replacement or peak-winter furnace emergencies',
+  fall: 'AC installation or cooling topics',
+};
+
+/**
+ * Tells the model what season and weather it actually is so it never writes
+ * about furnaces in summer or AC in winter. HVAC posts get an explicit
+ * "don't mention X" guardrail; non-seasonal business types just get the
+ * season/weather stated for color, with no restriction on keywords.
+ */
+function getSeasonalPromptContext(category, month = new Date().getMonth()) {
+  const entry = getCategoryEntry(category);
+  const season = getSeasonName(month);
+  const weather = SEASON_WEATHER_CONTEXT[season];
+
+  if (!entry?.seasonal) {
+    return `It is currently ${season} (${weather}).`;
+  }
+
+  return `It is currently ${season} (${weather}). This is an HVAC business, so only reference ${HVAC_SEASONAL_KEYWORDS[season].join(', ')}. Do NOT mention ${HVAC_SEASON_AVOID[season]} — that is the wrong season and will confuse customers.`;
+}
+
+function getInformationalTopics(category) {
+  const entry = getCategoryEntry(category);
+  return entry?.informationalTopics ?? [];
+}
+
 /**
  * Per-post-type angle so an OFFER reads like an offer and an EVENT like an event.
  * We never invent a specific discount amount or coupon — those come from the
  * location's saved offer config — so the copy stays honest on real listings.
  */
-function getPostTypeAngle(postType) {
+function getPostTypeAngle(postType, category) {
   const type = String(postType ?? 'UPDATE').toUpperCase();
   if (type === 'OFFER') {
     return {
@@ -139,7 +229,38 @@ function getPostTypeAngle(postType) {
       cta: 'Stop by or reach out to join us',
     };
   }
+  if (type === 'INFORMATIONAL') {
+    const topics = getInformationalTopics(category);
+    const topicHint =
+      topics.length > 0
+        ? ` Good example topics for this business: ${topics.join('; ')}. Pick one of these (or a close variation) and go deep on it — do not just list all of them.`
+        : ' Pick a genuinely useful, specific educational topic relevant to this business and go deep on it.';
+    return {
+      angle:
+        `Write this as an educational tip or how-to post, NOT a personal story or daily-life anecdote — teach the reader something real and useful about this business's services.${topicHint} Structure it like a quick, practical insight a real expert would share: state the tip clearly, then explain briefly why it matters or what to do about it.`,
+      cta: '',
+    };
+  }
   return { angle: '', cta: '' };
+}
+
+/**
+ * Picks a random town from the location's service area for this post so
+ * copy doesn't always name the same city. Falls back to the location's
+ * home city when serviceAreaTowns is empty or unset.
+ */
+async function resolvePostCity(locationId, fallbackCity) {
+  if (!locationId) return fallbackCity;
+
+  const location = await prisma.location.findUnique({
+    where: { id: locationId },
+    select: { serviceAreaTowns: true },
+  });
+
+  const towns = (location?.serviceAreaTowns ?? []).filter((t) => String(t ?? '').trim());
+  if (towns.length === 0) return fallbackCity;
+
+  return towns[Math.floor(Math.random() * towns.length)];
 }
 
 function pickTemplate(recentContents, businessName, keyword, city, cta) {
@@ -209,7 +330,8 @@ export async function generatePostContent(
 ) {
   const apiKey = env.OPENAI_API_KEY?.trim();
   const name = String(businessName ?? '').trim() || 'Business';
-  const locationCity = String(city ?? '').trim() || 'this area';
+  const fallbackCity = String(city ?? '').trim() || 'this area';
+  const locationCity = await resolvePostCity(locationId, fallbackCity);
   const categoryLabel = String(category ?? '').trim() || 'local business';
 
   const recentPosts = locationId
@@ -232,13 +354,15 @@ export async function generatePostContent(
   const businessType = getBusinessType(categoryLabel);
   const businessFocus = getBusinessFocus(categoryLabel);
   const primaryKeyword = getPrimaryKeyword(categoryLabel);
-  const typeAngle = getPostTypeAngle(postType);
+  const isInformational = String(postType ?? '').trim().toUpperCase() === 'INFORMATIONAL';
+  const typeAngle = getPostTypeAngle(postType, categoryLabel);
   const cta = typeAngle.cta || getCTA(businessType, primaryKeyword, locationCity);
 
   const draft = pickTemplate(recentContents, name, primaryKeyword, locationCity, cta);
 
   const currentDayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' });
   const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long' });
+  const seasonalContext = getSeasonalPromptContext(categoryLabel);
   const variationSeed = Math.floor(Math.random() * 100);
 
   if (!apiKey) {
@@ -258,26 +382,41 @@ export async function generatePostContent(
 
 Today is ${currentDayOfWeek} in ${currentMonth}. Post number ${dayOfYear}. Variation seed ${variationSeed}.
 
+${seasonalContext}
+
 Business focus for this post: ${businessFocus}
 ${typeAngle.angle ? `\nPost type angle (${String(postType).toUpperCase()}): ${typeAngle.angle}\n` : ''}
 RECENT POSTS ALREADY WRITTEN — DO NOT REPEAT ANY OF THESE OPENINGS, THEMES, STRUCTURES OR IDEAS:
 ${recentPostsSummary}
 
-You must write something completely different from all of the above. Different opening word. Different scenario. Different angle. Different sentence structure. Pretend something genuinely new happened today at this business.
+${
+    isInformational
+      ? 'You must write something completely different from all of the above. Different opening line. Different specific tip or topic. Different structure. Do not repeat a tip or topic already covered above.'
+      : 'You must write something completely different from all of the above. Different opening word. Different scenario. Different angle. Different sentence structure. Pretend something genuinely new happened today at this business.'
+  }
 
 Local SEO requirement: ${keywordStyleInstruction}
 
 Call to action requirement: End the post with a call to action that matches this meaning: "${cta}" (you may rephrase it slightly but keep the same intent and keep it at the very end).
 
 Rules:
-- First person casual tone like a real business owner texting a neighbor
+- ${
+    isInformational
+      ? 'Write like a knowledgeable business owner sharing a genuinely useful tip — NOT a personal anecdote or story about today'
+      : 'First person casual tone like a real business owner texting a neighbor'
+  }
 - Must relate specifically to ${businessFocus} with real industry scenarios
-- Feel like a different moment and situation every time
+- ${
+    isInformational
+      ? 'Teach something specific and useful — a clear tip, then why it matters or what to do about it'
+      : 'Feel like a different moment and situation every time'
+  }
 - Under 80 words
 - Mention ${name} naturally once
 - Include the local keyword and the call to action naturally, never like an ad
 - Sound human not AI
 - Current day: ${currentDayOfWeek}, Current month: ${currentMonth}
+- ${seasonalContext}
 
 Be creative. Surprise me with a fresh angle every single time.`;
 

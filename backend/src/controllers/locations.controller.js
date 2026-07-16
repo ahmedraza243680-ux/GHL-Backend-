@@ -8,6 +8,8 @@ import {
   listAllLocations,
   listLocationSummaries,
   listPendingPosts,
+  updateOfferConfig,
+  updateServiceAreaTowns,
 } from '../services/locations.service.js';
 import {
   approvePostForLocation,
@@ -52,6 +54,49 @@ export async function listAllPendingPosts(req, res, next) {
     return res.json({
       success: true,
       data: { posts, total: posts.length },
+      requestId: req.requestId,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function updateLocationServiceTowns(req, res, next) {
+  try {
+    const { locationId } = req.params;
+    if (!locationId) {
+      throw new AppError('locationId is required.', 400, { code: 'INVALID_PARAMS' });
+    }
+
+    const location = await updateServiceAreaTowns(locationId, req.body?.towns);
+
+    return res.json({
+      success: true,
+      data: { serviceAreaTowns: location.serviceAreaTowns },
+      requestId: req.requestId,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function updateLocationOfferConfig(req, res, next) {
+  try {
+    const { locationId } = req.params;
+    if (!locationId) {
+      throw new AppError('locationId is required.', 400, { code: 'INVALID_PARAMS' });
+    }
+
+    const { couponCode, terms, redeemUrl } = req.body ?? {};
+    const location = await updateOfferConfig(locationId, { couponCode, terms, redeemUrl });
+
+    return res.json({
+      success: true,
+      data: {
+        offerCouponCode: location.offerCouponCode,
+        offerTerms: location.offerTerms,
+        offerRedeemUrl: location.offerRedeemUrl,
+      },
       requestId: req.requestId,
     });
   } catch (e) {

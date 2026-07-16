@@ -229,7 +229,7 @@ export async function runDailyPostPublisher(options = {}) {
       businessName,
       category,
       'New Jersey',
-      publishType,
+      scheduleType,
       dayOfYear,
     );
 

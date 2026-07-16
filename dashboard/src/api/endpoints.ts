@@ -165,6 +165,40 @@ export async function deletePost(
   return data.data;
 }
 
+export async function updateLocationServiceTowns(
+  locationId: string,
+  towns: string[],
+): Promise<string[]> {
+  const { data } = await api.patch<ApiResponse<{ serviceAreaTowns: string[] }>>(
+    `/locations/${locationId}/service-towns`,
+    { towns },
+  );
+  return data.data.serviceAreaTowns;
+}
+
+export interface OfferConfigPayload {
+  couponCode: string;
+  terms: string;
+  redeemUrl: string;
+}
+
+export interface OfferConfig {
+  offerCouponCode: string | null;
+  offerTerms: string | null;
+  offerRedeemUrl: string | null;
+}
+
+export async function updateLocationOfferConfig(
+  locationId: string,
+  payload: OfferConfigPayload,
+): Promise<OfferConfig> {
+  const { data } = await api.patch<ApiResponse<OfferConfig>>(
+    `/locations/${locationId}/offer-config`,
+    payload,
+  );
+  return data.data;
+}
+
 export async function fetchLocationSchedule(
   locationId: string,
 ): Promise<LocationSchedule> {

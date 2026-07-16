@@ -10,6 +10,10 @@ export interface Location {
   ghlPostStatusFieldId: string | null;
   status: string;
   timezone: string;
+  serviceAreaTowns: string[];
+  offerCouponCode: string | null;
+  offerTerms: string | null;
+  offerRedeemUrl: string | null;
 }
 
 export interface LocationSummary extends Location {

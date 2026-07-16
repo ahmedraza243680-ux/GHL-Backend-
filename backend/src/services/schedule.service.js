@@ -11,7 +11,7 @@ export const WEEKDAYS = [
   'Saturday',
 ];
 
-export const ALLOWED_POST_TYPES = ['UPDATE', 'OFFER', 'EVENT', 'VIDEO'];
+export const ALLOWED_POST_TYPES = ['UPDATE', 'OFFER', 'EVENT', 'VIDEO', 'INFORMATIONAL'];
 
 const DEFAULT_SCHEDULE = {
   postsPerWeek: 3,
@@ -62,7 +62,7 @@ function normalizePostTypes(postTypes) {
 
 export function mapScheduleTypeToPublishType(scheduleType) {
   const t = String(scheduleType ?? 'UPDATE').toUpperCase();
-  if (t === 'VIDEO') return 'UPDATE';
+  if (t === 'VIDEO' || t === 'INFORMATIONAL') return 'UPDATE';
   if (t === 'EVENT' || t === 'OFFER' || t === 'UPDATE') return t;
   return 'UPDATE';
 }

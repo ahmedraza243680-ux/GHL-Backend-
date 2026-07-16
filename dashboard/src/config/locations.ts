@@ -13,7 +13,7 @@ export const KNOWN_LOCATIONS = [
     ghlLocationId: '4diJ9Q8sTqY55I5ihUD7',
   },
   {
-    businessName: 'Biz Solutions INC',
+    businessName: 'Webtudy',
     locationId: 'cmp7ok6nu0008ve1sn4c7g70x',
     ghlLocationId: 'cFaTJXAmUqSLpoaxQ2fn',
   },

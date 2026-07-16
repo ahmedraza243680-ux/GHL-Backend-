@@ -43,7 +43,64 @@ export async function listAllLocations() {
     ghlPostStatusFieldId: loc.ghlPostStatusFieldId,
     status: loc.status,
     timezone: loc.timezone,
+    serviceAreaTowns: loc.serviceAreaTowns,
+    offerCouponCode: loc.offerCouponCode,
+    offerTerms: loc.offerTerms,
+    offerRedeemUrl: loc.offerRedeemUrl,
   }));
+}
+
+/**
+ * Replaces a location's service area town list. Empty strings are dropped;
+ * an empty result falls back to the location's home city at post-generation time.
+ */
+export async function updateServiceAreaTowns(locationId, towns) {
+  if (!Array.isArray(towns)) {
+    throw new AppError('towns must be an array of strings.', 400, { code: 'INVALID_BODY' });
+  }
+
+  const cleaned = towns.map((t) => String(t ?? '').trim()).filter((t) => t.length > 0);
+
+  try {
+    return await prisma.location.update({
+      where: { id: locationId },
+      data: { serviceAreaTowns: cleaned },
+      select: { id: true, serviceAreaTowns: true },
+    });
+  } catch (e) {
+    if (e.code === 'P2025') {
+      throw new AppError('Location not found.', 404, { code: 'LOCATION_NOT_FOUND' });
+    }
+    throw e;
+  }
+}
+
+/**
+ * Saves a location's OFFER post config. Empty strings are stored as null so
+ * gbp.service.js's buildOfferDetails never sends a fabricated coupon/terms/url.
+ */
+export async function updateOfferConfig(locationId, { couponCode, terms, redeemUrl } = {}) {
+  const clean = (value) => {
+    const trimmed = String(value ?? '').trim();
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
+  try {
+    return await prisma.location.update({
+      where: { id: locationId },
+      data: {
+        offerCouponCode: clean(couponCode),
+        offerTerms: clean(terms),
+        offerRedeemUrl: clean(redeemUrl),
+      },
+      select: { id: true, offerCouponCode: true, offerTerms: true, offerRedeemUrl: true },
+    });
+  } catch (e) {
+    if (e.code === 'P2025') {
+      throw new AppError('Location not found.', 404, { code: 'LOCATION_NOT_FOUND' });
+    }
+    throw e;
+  }
 }
 
 /**
