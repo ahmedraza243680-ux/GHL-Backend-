@@ -8,6 +8,8 @@ import {
   listAllLocations,
   listLocationSummaries,
   listPendingPosts,
+  updateGoogleLinkage,
+  updateMaxPostLength,
   updateOfferConfig,
   updateServiceAreaTowns,
 } from '../services/locations.service.js';
@@ -80,6 +82,30 @@ export async function updateLocationServiceTowns(req, res, next) {
   }
 }
 
+export async function updateLocationGoogleLocation(req, res, next) {
+  try {
+    const { locationId } = req.params;
+    if (!locationId) {
+      throw new AppError('locationId is required.', 400, { code: 'INVALID_PARAMS' });
+    }
+
+    const { googleAccountId, googleLocationId } = req.body ?? {};
+    const location = await updateGoogleLinkage(locationId, { googleAccountId, googleLocationId });
+
+    return res.json({
+      success: true,
+      data: {
+        id: location.id,
+        googleAccountId: location.googleAccountId,
+        googleLocationId: location.googleLocationId,
+      },
+      requestId: req.requestId,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function updateLocationOfferConfig(req, res, next) {
   try {
     const { locationId } = req.params;
@@ -97,6 +123,25 @@ export async function updateLocationOfferConfig(req, res, next) {
         offerTerms: location.offerTerms,
         offerRedeemUrl: location.offerRedeemUrl,
       },
+      requestId: req.requestId,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function updateLocationPostLength(req, res, next) {
+  try {
+    const { locationId } = req.params;
+    if (!locationId) {
+      throw new AppError('locationId is required.', 400, { code: 'INVALID_PARAMS' });
+    }
+
+    const location = await updateMaxPostLength(locationId, req.body?.maxPostLength);
+
+    return res.json({
+      success: true,
+      data: { id: location.id, maxPostLength: location.maxPostLength },
       requestId: req.requestId,
     });
   } catch (e) {

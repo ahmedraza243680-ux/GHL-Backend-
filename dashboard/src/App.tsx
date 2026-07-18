@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { LocationsProvider } from './contexts/LocationsContext';
 import { Layout } from './components/Layout';
+import { AddBusinessPage } from './pages/AddBusinessPage';
 import { ApprovalQueuePage } from './pages/ApprovalQueuePage';
 import { ContactSubmissionsPage } from './pages/ContactSubmissionsPage';
 import { FormSubmissionTestPage } from './pages/FormSubmissionTestPage';
@@ -21,6 +22,7 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<OverviewPage />} />
+            <Route path="add-business" element={<AddBusinessPage />} />
             <Route path="posts" element={<PostsPage />} />
             <Route path="daily-job" element={<DailyJobPage />} />
             <Route path="ghl-status" element={<GhlStatusPage />} />

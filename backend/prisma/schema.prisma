@@ -44,6 +44,7 @@ enum SiteStatus {
 model Business {
   id            String         @id @default(cuid())
   name          String
+  category      String?
   ghlAccountId  String         @unique
   status        BusinessStatus @default(ACTIVE)
   createdAt     DateTime       @default(now())
@@ -57,7 +58,11 @@ model Location {
   ghlLocationId      String           @unique
   googleLocationId   String?
   googleAccountId    String?
+  city               String?
   timezone           String           @default("UTC")
+  /// Max word length for generated posts (50-300). Default 80 matches the
+  /// original hardcoded limit used in the content generator prompt.
+  maxPostLength      Int              @default(80)
   status             LocationStatus   @default(ACTIVE)
   requiresApproval   Boolean          @default(false)
   ghlLastPostDateFieldId String?

@@ -10,6 +10,7 @@ export interface Location {
   ghlPostStatusFieldId: string | null;
   status: string;
   timezone: string;
+  maxPostLength: number;
   serviceAreaTowns: string[];
   offerCouponCode: string | null;
   offerTerms: string | null;

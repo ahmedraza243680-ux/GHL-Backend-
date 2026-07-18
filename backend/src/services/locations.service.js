@@ -43,6 +43,7 @@ export async function listAllLocations() {
     ghlPostStatusFieldId: loc.ghlPostStatusFieldId,
     status: loc.status,
     timezone: loc.timezone,
+    maxPostLength: loc.maxPostLength,
     serviceAreaTowns: loc.serviceAreaTowns,
     offerCouponCode: loc.offerCouponCode,
     offerTerms: loc.offerTerms,
@@ -94,6 +95,66 @@ export async function updateOfferConfig(locationId, { couponCode, terms, redeemU
         offerRedeemUrl: clean(redeemUrl),
       },
       select: { id: true, offerCouponCode: true, offerTerms: true, offerRedeemUrl: true },
+    });
+  } catch (e) {
+    if (e.code === 'P2025') {
+      throw new AppError('Location not found.', 404, { code: 'LOCATION_NOT_FOUND' });
+    }
+    throw e;
+  }
+}
+
+const MIN_POST_LENGTH = 50;
+const MAX_POST_LENGTH = 300;
+
+/**
+ * Saves a location's max post word length (50-300). This drives the word limit
+ * used in the content generator's OpenAI prompt for that location's posts.
+ */
+export async function updateMaxPostLength(locationId, maxPostLength) {
+  const n = Number(maxPostLength);
+  if (!Number.isInteger(n) || n < MIN_POST_LENGTH || n > MAX_POST_LENGTH) {
+    throw new AppError(
+      `maxPostLength must be an integer between ${MIN_POST_LENGTH} and ${MAX_POST_LENGTH}.`,
+      400,
+      { code: 'INVALID_BODY' },
+    );
+  }
+
+  try {
+    return await prisma.location.update({
+      where: { id: locationId },
+      data: { maxPostLength: n },
+      select: { id: true, maxPostLength: true },
+    });
+  } catch (e) {
+    if (e.code === 'P2025') {
+      throw new AppError('Location not found.', 404, { code: 'LOCATION_NOT_FOUND' });
+    }
+    throw e;
+  }
+}
+
+/**
+ * Links a location to a selected Google Business Profile location (and optionally
+ * its Google account). Used by the Add Business flow after OAuth so the daily job
+ * can publish to the chosen GBP listing.
+ */
+export async function updateGoogleLinkage(locationId, { googleAccountId, googleLocationId } = {}) {
+  const gLocationId = String(googleLocationId ?? '').trim();
+  if (!gLocationId) {
+    throw new AppError('googleLocationId is required.', 400, { code: 'INVALID_BODY' });
+  }
+  const gAccountId = String(googleAccountId ?? '').trim();
+
+  try {
+    return await prisma.location.update({
+      where: { id: locationId },
+      data: {
+        googleLocationId: gLocationId,
+        ...(gAccountId ? { googleAccountId: gAccountId } : {}),
+      },
+      select: { id: true, googleAccountId: true, googleLocationId: true },
     });
   } catch (e) {
     if (e.code === 'P2025') {

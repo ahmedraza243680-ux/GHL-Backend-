@@ -2,8 +2,20 @@ import OpenAI from 'openai';
 import { env } from '../config/env.js';
 import prisma from '../database/client.js';
 
-const SYSTEM_PROMPT =
-  'You are a creative local business writer. Your job is to make every single post feel like a completely fresh moment. Never reuse openings, themes or structures from previous posts. If you catch yourself starting with a word you used before, stop and start differently. Be genuinely creative and surprising every time. Write in first person casual tone like a real business owner. No corporate words. No hashtags. No emojis. Under 80 words. Weave in the requested keyword and call to action naturally, never like an ad.';
+const DEFAULT_MAX_POST_LENGTH = 80;
+const MIN_POST_LENGTH = 50;
+const MAX_POST_LENGTH = 300;
+
+/** Clamps the configured word limit to the allowed 50-300 range, defaulting to 80. */
+function resolveMaxWords(maxPostLength) {
+  const n = Number(maxPostLength);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAX_POST_LENGTH;
+  return Math.min(MAX_POST_LENGTH, Math.max(MIN_POST_LENGTH, Math.round(n)));
+}
+
+function buildSystemPrompt(maxWords) {
+  return `You are a creative local business writer. Your job is to make every single post feel like a completely fresh moment. Never reuse openings, themes or structures from previous posts. If you catch yourself starting with a word you used before, stop and start differently. Be genuinely creative and surprising every time. Write in first person casual tone like a real business owner. No corporate words. No hashtags. No emojis. Under ${maxWords} words. Weave in the requested keyword and call to action naturally, never like an ad.`;
+}
 
 const DRAFT_TEMPLATES = [
   (biz, keyword, city) =>
@@ -327,8 +339,10 @@ export async function generatePostContent(
   city,
   postType,
   dayOfYear,
+  maxPostLength = DEFAULT_MAX_POST_LENGTH,
 ) {
   const apiKey = env.OPENAI_API_KEY?.trim();
+  const maxWords = resolveMaxWords(maxPostLength);
   const name = String(businessName ?? '').trim() || 'Business';
   const fallbackCity = String(city ?? '').trim() || 'this area';
   const locationCity = await resolvePostCity(locationId, fallbackCity);
@@ -411,7 +425,7 @@ Rules:
       ? 'Teach something specific and useful — a clear tip, then why it matters or what to do about it'
       : 'Feel like a different moment and situation every time'
   }
-- Under 80 words
+- Under ${maxWords} words
 - Mention ${name} naturally once
 - Include the local keyword and the call to action naturally, never like an ad
 - Sound human not AI
@@ -425,9 +439,9 @@ Be creative. Surprise me with a fresh angle every single time.`;
     const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.8,
-      max_tokens: 200,
+      max_tokens: Math.min(1000, Math.max(200, Math.round(maxWords * 2.2))),
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: buildSystemPrompt(maxWords) },
         { role: 'user', content: userPrompt },
       ],
     });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import {
   fetchLocationSchedule,
+  updateLocationMaxPostLength,
   updateLocationOfferConfig,
   updateLocationSchedule,
   updateLocationServiceTowns,
@@ -458,6 +459,57 @@ function OfferSettingsSection({
   );
 }
 
+const MIN_POST_LENGTH = 50;
+const MAX_POST_LENGTH = 300;
+const DEFAULT_POST_LENGTH = 80;
+
+function PostLengthSection({
+  value,
+  disabled,
+  onChange,
+  onSave,
+  saving,
+}: {
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const parsed = Number.parseInt(value, 10);
+  const invalid =
+    value.trim() === '' ||
+    Number.isNaN(parsed) ||
+    parsed < MIN_POST_LENGTH ||
+    parsed > MAX_POST_LENGTH;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={MIN_POST_LENGTH}
+          max={MAX_POST_LENGTH}
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40 sm:w-32"
+        />
+        <span className="text-sm text-slate-500">words per post</span>
+      </div>
+      {invalid && (
+        <p className="text-xs text-amber-300/90">
+          Enter a number between {MIN_POST_LENGTH} and {MAX_POST_LENGTH}.
+        </p>
+      )}
+      <Button type="button" size="sm" disabled={disabled || invalid} onClick={onSave}>
+        {saving ? 'Saving…' : 'Save post length'}
+      </Button>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { locations, loading: locationsLoading } = useLocations();
   const [forms, setForms] = useState<Record<string, LocationScheduleForm>>({});
@@ -472,6 +524,9 @@ export function SettingsPage() {
 
   const [offerForms, setOfferForms] = useState<Record<string, OfferConfigPayload>>({});
   const [offerSavingId, setOfferSavingId] = useState<string | null>(null);
+
+  const [postLengthForms, setPostLengthForms] = useState<Record<string, string>>({});
+  const [postLengthSavingId, setPostLengthSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     setTownForms((prev) => {
@@ -496,6 +551,18 @@ export function SettingsPage() {
             terms: loc.offerTerms ?? '',
             redeemUrl: loc.offerRedeemUrl ?? '',
           };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    setPostLengthForms((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const loc of locations) {
+        if (!(loc.id in next)) {
+          next[loc.id] = String(loc.maxPostLength ?? DEFAULT_POST_LENGTH);
           changed = true;
         }
       }
@@ -600,6 +667,31 @@ export function SettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to save offer settings');
     } finally {
       setOfferSavingId(null);
+    }
+  }
+
+  async function handleSavePostLength(locationId: string, businessName: string) {
+    const raw = postLengthForms[locationId] ?? String(DEFAULT_POST_LENGTH);
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isNaN(parsed) || parsed < MIN_POST_LENGTH || parsed > MAX_POST_LENGTH) {
+      setError(
+        `Post length for ${businessName} must be between ${MIN_POST_LENGTH} and ${MAX_POST_LENGTH} words.`,
+      );
+      return;
+    }
+
+    setPostLengthSavingId(locationId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const saved = await updateLocationMaxPostLength(locationId, parsed);
+      setPostLengthForms((prev) => ({ ...prev, [locationId]: String(saved) }));
+      setSuccess(`Max post length saved for ${businessName}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save post length');
+    } finally {
+      setPostLengthSavingId(null);
     }
   }
 
@@ -849,6 +941,21 @@ export function SettingsPage() {
                       onChange={(patch) => patchOfferForm(loc.id, patch)}
                       onSave={() => void handleSaveOfferConfig(loc.id, loc.businessName)}
                       saving={offerSavingId === loc.id}
+                    />
+                  </SettingsField>
+
+                  <SettingsField
+                    label="Post Length"
+                    hint={`Max words per generated post (${MIN_POST_LENGTH}-${MAX_POST_LENGTH}). Defaults to ${DEFAULT_POST_LENGTH}.`}
+                  >
+                    <PostLengthSection
+                      value={postLengthForms[loc.id] ?? String(DEFAULT_POST_LENGTH)}
+                      disabled={postLengthSavingId === loc.id}
+                      onChange={(value) =>
+                        setPostLengthForms((prev) => ({ ...prev, [loc.id]: value }))
+                      }
+                      onSave={() => void handleSavePostLength(loc.id, loc.businessName)}
+                      saving={postLengthSavingId === loc.id}
                     />
                   </SettingsField>
                 </CardContent>

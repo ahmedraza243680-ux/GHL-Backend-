@@ -12,8 +12,10 @@ import {
   listLocationsSummary,
   publishLocationPost,
   rejectLocationPost,
+  updateLocationGoogleLocation,
   updateLocationOfferConfig,
   updateLocationPost,
+  updateLocationPostLength,
   updateLocationServiceTowns,
   uploadLocationMedia,
 } from '../controllers/locations.controller.js';
@@ -28,6 +30,8 @@ router.get('/pending-posts', asyncHandler(listAllPendingPosts));
 router.get('/:locationId/gbp', asyncHandler(getLocationGbp));
 router.patch('/:locationId/service-towns', asyncHandler(updateLocationServiceTowns));
 router.patch('/:locationId/offer-config', asyncHandler(updateLocationOfferConfig));
+router.patch('/:locationId/post-length', asyncHandler(updateLocationPostLength));
+router.patch('/:locationId/google-location', asyncHandler(updateLocationGoogleLocation));
 router.get('/:locationId/media', asyncHandler(listLocationMedia));
 router.post(
   '/:locationId/media/upload',

@@ -231,6 +231,7 @@ export async function runDailyPostPublisher(options = {}) {
       'New Jersey',
       scheduleType,
       dayOfYear,
+      loc.maxPostLength,
     );
 
     const mediaUrl = await resolveDailyPostMediaUrl(

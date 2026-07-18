@@ -1,4 +1,5 @@
 import {
+  Building2,
   CalendarClock,
   ClipboardList,
   Database,
@@ -17,6 +18,7 @@ import { cn } from '../lib/utils';
 
 const navItems = [
   { to: '/', label: 'Overview', end: true, icon: LayoutDashboard },
+  { to: '/add-business', label: 'Add Business', icon: Building2 },
   { to: '/posts', label: 'Posts', icon: ClipboardList },
   { to: '/daily-job', label: 'Run Daily Job', icon: PlayCircle },
   { to: '/settings', label: 'Settings', icon: SlidersHorizontal },

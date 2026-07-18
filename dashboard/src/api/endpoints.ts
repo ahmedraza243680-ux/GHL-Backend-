@@ -16,6 +16,96 @@ export async function fetchLocations(): Promise<Location[]> {
   return data.data.locations.map(applyLocationMapping);
 }
 
+// ——— Add Business flow ———
+
+export interface Business {
+  id: string;
+  name: string;
+  category: string | null;
+  ghlAccountId: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+}
+
+export interface CreatedLocation {
+  id: string;
+  businessId: string;
+  ghlLocationId: string;
+  city: string | null;
+  timezone: string;
+  status: string;
+  googleAccountId: string | null;
+  googleLocationId: string | null;
+}
+
+export interface CreateBusinessPayload {
+  name: string;
+  category?: string | null;
+  city?: string | null;
+  timezone?: string;
+  postDays?: string[];
+  postTime?: string;
+}
+
+export interface CreateBusinessResult {
+  business: Business;
+  location: CreatedLocation;
+}
+
+export async function createBusiness(
+  payload: CreateBusinessPayload,
+): Promise<CreateBusinessResult> {
+  const { data } = await api.post<ApiResponse<CreateBusinessResult>>('/businesses', payload);
+  return data.data;
+}
+
+export async function getGoogleAuthUrl(locationId: string): Promise<string> {
+  const { data } = await api.get<ApiResponse<{ url: string }>>('/auth/google/url', {
+    params: { state: locationId },
+  });
+  return data.data.url;
+}
+
+export interface GoogleAccount {
+  accountId: string;
+  name: string | null;
+}
+
+export async function fetchGoogleAccounts(locationId: string): Promise<GoogleAccount[]> {
+  const { data } = await api.get<ApiResponse<{ accounts: GoogleAccount[] }>>(
+    '/auth/google/accounts',
+    { params: { locationId } },
+  );
+  return data.data.accounts;
+}
+
+export interface GoogleGbpLocation {
+  name: string | null;
+  title: string | null;
+  locationId: string | null;
+}
+
+export async function fetchGoogleLocations(
+  locationId: string,
+  accountId: string,
+): Promise<GoogleGbpLocation[]> {
+  const { data } = await api.get<ApiResponse<{ locations: GoogleGbpLocation[] }>>(
+    '/auth/google/locations',
+    { params: { locationId, accountId } },
+  );
+  return data.data.locations;
+}
+
+export async function saveGoogleLocation(
+  locationId: string,
+  payload: { googleAccountId: string; googleLocationId: string },
+): Promise<{ id: string; googleAccountId: string | null; googleLocationId: string | null }> {
+  const { data } = await api.patch<
+    ApiResponse<{ id: string; googleAccountId: string | null; googleLocationId: string | null }>
+  >(`/locations/${locationId}/google-location`, payload);
+  return data.data;
+}
+
 export async function fetchLocationSummaries(): Promise<LocationSummary[]> {
   const { data } = await api.get<ApiResponse<{ summaries: LocationSummary[] }>>(
     '/locations/summary',
@@ -197,6 +287,17 @@ export async function updateLocationOfferConfig(
     payload,
   );
   return data.data;
+}
+
+export async function updateLocationMaxPostLength(
+  locationId: string,
+  maxPostLength: number,
+): Promise<number> {
+  const { data } = await api.patch<ApiResponse<{ id: string; maxPostLength: number }>>(
+    `/locations/${locationId}/post-length`,
+    { maxPostLength },
+  );
+  return data.data.maxPostLength;
 }
 
 export async function fetchLocationSchedule(
