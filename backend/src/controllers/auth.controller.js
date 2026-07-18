@@ -17,6 +17,41 @@ function signLocationSession(locationId) {
   );
 }
 
+/**
+ * Decodes the OAuth `state` round-tripped through Google.
+ *
+ * The dashboard sends a base64url JSON payload `{ l: locationId, r: returnUrl }`
+ * so the callback can redirect the same browser tab straight back to the
+ * dashboard. A plain string is still accepted as a bare locationId for manual /
+ * API testing that predates the redirect flow.
+ */
+function decodeOAuthState(rawState) {
+  const raw = rawState != null ? String(rawState) : '';
+  if (!raw) return { locationId: '', returnUrl: '' };
+  try {
+    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const parsed = JSON.parse(Buffer.from(normalized, 'base64').toString('utf8'));
+    if (parsed && typeof parsed === 'object' && parsed.l) {
+      return {
+        locationId: String(parsed.l),
+        returnUrl: parsed.r ? String(parsed.r) : '',
+      };
+    }
+  } catch {
+    // Not an encoded payload — fall through and treat it as a plain locationId.
+  }
+  return { locationId: raw, returnUrl: '' };
+}
+
+/** Only ever redirect back to an origin we already trust for CORS. */
+function isAllowedReturnUrl(returnUrl) {
+  try {
+    return env.corsOrigins.includes(new URL(returnUrl).origin);
+  } catch {
+    return false;
+  }
+}
+
 export function getAuthUrl(req, res, next) {
   try {
     const state = req.query.state ? String(req.query.state) : undefined;
@@ -152,7 +187,7 @@ export async function getGoogleOAuthCallback(req, res, next) {
     if (!code || typeof code !== 'string') {
       throw new AppError('Missing authorization code.', 400, { code: 'OAUTH_CODE_MISSING' });
     }
-    const locationId = state != null && state !== '' ? String(state) : '';
+    const { locationId, returnUrl } = decodeOAuthState(state);
     if (!locationId) {
       throw new AppError(
         'Missing state (locationId). Start from GET /auth/google/url?state=YOUR_LOCATION_ID, then sign in.',
@@ -178,6 +213,19 @@ export async function getGoogleOAuthCallback(req, res, next) {
       });
     }
 
+    // Root-cause fix for the "popup won't close" problem: the dashboard uses a
+    // same-tab redirect, so there is no popup to close. We simply send the
+    // browser back to the dashboard, which resumes the wizard from the tokens
+    // we just stored.
+    if (returnUrl && isAllowedReturnUrl(returnUrl)) {
+      const sep = returnUrl.includes('?') ? '&' : '?';
+      return res.redirect(
+        `${returnUrl}${sep}google=connected&locationId=${encodeURIComponent(locationId)}`,
+      );
+    }
+
+    // Legacy fallback: no trusted return origin supplied (e.g. hitting the
+    // callback URL directly during API testing). Show a simple confirmation.
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>

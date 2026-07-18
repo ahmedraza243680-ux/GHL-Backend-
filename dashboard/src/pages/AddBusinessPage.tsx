@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ExternalLink,
   Loader2,
-  RefreshCw,
 } from 'lucide-react';
 import {
   createBusiness,
@@ -47,6 +46,19 @@ const CATEGORY_OPTIONS = [
 
 /** Sentinel value for the "add a custom category" dropdown option. */
 const CUSTOM_CATEGORY = '__custom__';
+
+/** sessionStorage key that survives the full-page redirect to Google and back. */
+const OAUTH_STASH_KEY = 'peakwa_add_business_oauth';
+
+/**
+ * Packs the locationId and the dashboard's own return URL into the OAuth `state`
+ * (base64url JSON) so the backend callback can redirect this same tab straight
+ * back here — no popup, so nothing to close.
+ */
+function encodeOAuthState(locationId: string, returnUrl: string): string {
+  const json = JSON.stringify({ l: locationId, r: returnUrl });
+  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 const WEEKDAYS = [
   'Monday',
@@ -133,12 +145,9 @@ export function AddBusinessPage() {
   const [newLocationId, setNewLocationId] = useState('');
   const [newBusinessName, setNewBusinessName] = useState('');
 
-  // Step 2 (connect) state
+  // Step 2 (connect) state — same-tab redirect flow, no popup.
   const [connecting, setConnecting] = useState(false);
-  const [awaitingOAuth, setAwaitingOAuth] = useState(false);
-  const [consentUrl, setConsentUrl] = useState('');
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const popupRef = useRef<Window | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   // Step 3 (select) state
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
@@ -148,23 +157,59 @@ export function AddBusinessPage() {
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
+  // When Google redirects the tab back here (?google=connected&locationId=...),
+  // resume the wizard: confirm the tokens landed, then jump to the picker.
   useEffect(() => {
-    return () => {
-      stopPolling();
-      try {
-        popupRef.current?.close();
-      } catch {
-        // Ignore — nothing we can do if the popup can't be closed.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google') !== 'connected') return;
+    const locationId = params.get('locationId') ?? '';
+    if (!locationId) return;
+
+    let businessName = '';
+    try {
+      const stash = sessionStorage.getItem(OAUTH_STASH_KEY);
+      if (stash) {
+        const parsed = JSON.parse(stash) as { businessName?: string };
+        if (parsed.businessName) businessName = parsed.businessName;
       }
-    };
-  }, [stopPolling]);
+    } catch {
+      // sessionStorage unavailable — the name just won't be pre-filled.
+    }
+
+    // Clean the URL and stash so a refresh can't re-trigger this.
+    window.history.replaceState({}, '', '/add-business');
+    try {
+      sessionStorage.removeItem(OAUTH_STASH_KEY);
+    } catch {
+      // Ignore.
+    }
+
+    setNewLocationId(locationId);
+    if (businessName) setNewBusinessName(businessName);
+    setStep('connect');
+    setRestoring(true);
+    setError(null);
+
+    fetchGoogleAccounts(locationId)
+      .then((found) => {
+        if (found && found.length > 0) {
+          setAccounts(found);
+          setSelectedAccountId((prev) => prev || found[0]?.accountId || '');
+          setNotice(
+            'Google connected. Choose the Business Profile location that matches this business.',
+          );
+          setStep('select');
+        } else {
+          setError('Google sign-in finished but no account was found. Try connecting again.');
+        }
+      })
+      .catch((err) => {
+        setError(
+          err instanceof Error ? err.message : 'Could not load your Google account. Try again.',
+        );
+      })
+      .finally(() => setRestoring(false));
+  }, []);
 
   function toggleDay(day: string) {
     setPostDays((prev) =>
@@ -216,96 +261,28 @@ export function AddBusinessPage() {
     }
   }
 
-  const proceedToSelect = useCallback((found: GoogleAccount[]) => {
-    // Close the OAuth popup once we've detected the connection so the user
-    // doesn't have to dismiss the "Google account linked" page manually.
-    try {
-      popupRef.current?.close();
-    } catch {
-      // Ignore — popup may already be closed or blocked from closing.
-    }
-    popupRef.current = null;
-    setAccounts(found);
-    setSelectedAccountId((prev) => prev || found[0]?.accountId || '');
-    setAwaitingOAuth(false);
-    setNotice('Google connected. Choose the Business Profile location that matches this business.');
-    setStep('select');
-  }, []);
-
-  // The OAuth callback page posts a message when it links the account, then
-  // closes itself. React to it immediately instead of waiting for the poll.
-  useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      const data = event.data as
-        | { type?: string; status?: string; locationId?: string }
-        | null;
-      if (!data || data.type !== 'peakwa-google-oauth' || data.status !== 'success') return;
-      if (!newLocationId || (data.locationId && data.locationId !== newLocationId)) return;
-
-      // The message only signals completion — confirm real tokens exist before
-      // advancing, so a stray/spoofed message can never fake a connection.
-      void fetchGoogleAccounts(newLocationId)
-        .then((found) => {
-          if (found && found.length > 0) {
-            stopPolling();
-            proceedToSelect(found);
-          }
-        })
-        .catch(() => {
-          // Ignore — polling remains as the fallback.
-        });
-    }
-
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [newLocationId, proceedToSelect, stopPolling]);
-
-  const startPolling = useCallback(
-    (locationId: string) => {
-      stopPolling();
-      pollRef.current = setInterval(async () => {
-        try {
-          const found = await fetchGoogleAccounts(locationId);
-          if (found && found.length > 0) {
-            stopPolling();
-            proceedToSelect(found);
-          }
-        } catch {
-          // Not connected yet — keep polling until the user finishes OAuth.
-        }
-      }, 3000);
-    },
-    [proceedToSelect, stopPolling],
-  );
-
   async function handleConnectGoogle() {
     setError(null);
     setConnecting(true);
     try {
-      const url = await getGoogleAuthUrl(newLocationId);
-      setConsentUrl(url);
-      popupRef.current = window.open(url, 'peakwa-google-oauth', 'width=520,height=720');
-      setAwaitingOAuth(true);
-      startPolling(newLocationId);
+      const returnUrl = `${window.location.origin}/add-business`;
+      const state = encodeOAuthState(newLocationId, returnUrl);
+      const url = await getGoogleAuthUrl(state);
+      // Preserve the one piece of wizard state a fresh page load can't recover.
+      try {
+        sessionStorage.setItem(
+          OAUTH_STASH_KEY,
+          JSON.stringify({ locationId: newLocationId, businessName: newBusinessName }),
+        );
+      } catch {
+        // sessionStorage unavailable — the locationId still rides in the URL.
+      }
+      // Same-tab redirect: Google sends the browser back to us when done, so
+      // there is no popup to close.
+      window.location.assign(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start Google connection.');
-    } finally {
       setConnecting(false);
-    }
-  }
-
-  async function handleManualCheck() {
-    setError(null);
-    try {
-      const found = await fetchGoogleAccounts(newLocationId);
-      if (found && found.length > 0) {
-        stopPolling();
-        proceedToSelect(found);
-      } else {
-        setError('No Google account found yet. Finish the Google sign-in, then try again.');
-      }
-    } catch {
-      setError('Google is not connected yet. Complete the sign-in in the popup, then try again.');
     }
   }
 
@@ -508,49 +485,25 @@ export function AddBusinessPage() {
               <p className="mt-1 text-sm text-slate-400">
                 Sign in with the Google account that manages{' '}
                 <span className="font-medium text-slate-200">{newBusinessName}</span>&apos;s Business
-                Profile. A popup will open for Google sign-in.
+                Profile. You&apos;ll be taken to Google and brought right back here.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            {restoring ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+                Finishing Google connection…
+              </div>
+            ) : (
               <Button onClick={handleConnectGoogle} disabled={connecting}>
                 {connecting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <ExternalLink className="h-4 w-4" />
                 )}
-                {connecting ? 'Opening…' : 'Connect Google'}
+                {connecting ? 'Redirecting…' : 'Connect Google'}
               </Button>
-
-              {awaitingOAuth ? (
-                <Button variant="outline" onClick={handleManualCheck}>
-                  <RefreshCw className="h-4 w-4" />
-                  I&apos;ve connected — continue
-                </Button>
-              ) : null}
-            </div>
-
-            {awaitingOAuth ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
-                Waiting for Google sign-in to complete…
-              </div>
-            ) : null}
-
-            {consentUrl ? (
-              <p className="text-xs text-slate-500">
-                Popup blocked?{' '}
-                <a
-                  href={consentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-emerald-400 underline hover:text-emerald-300"
-                >
-                  Open the Google consent page in a new tab
-                </a>
-                .
-              </p>
-            ) : null}
+            )}
           </div>
         ) : null}
 
