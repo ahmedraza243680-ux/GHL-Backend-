@@ -201,7 +201,9 @@ export function PostsPage() {
 
       {loading ? (
         <>
-          <CardListSkeleton count={3} />
+          <div className="lg:hidden">
+            <CardListSkeleton count={3} />
+          </div>
           <div className="hidden lg:block">
             <TableSkeleton rows={pageSize > 5 ? 5 : pageSize} />
           </div>

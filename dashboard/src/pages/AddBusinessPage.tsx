@@ -45,6 +45,9 @@ const CATEGORY_OPTIONS = [
   'General',
 ];
 
+/** Sentinel value for the "add a custom category" dropdown option. */
+const CUSTOM_CATEGORY = '__custom__';
+
 const WEEKDAYS = [
   'Monday',
   'Tuesday',
@@ -119,6 +122,7 @@ export function AddBusinessPage() {
   // Step 1 form state
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
   const [city, setCity] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [postDays, setPostDays] = useState<string[]>(['Monday', 'Wednesday', 'Friday']);
@@ -173,11 +177,18 @@ export function AddBusinessPage() {
       return;
     }
 
+    const resolvedCategory =
+      category === CUSTOM_CATEGORY ? customCategory.trim() : category;
+    if (category === CUSTOM_CATEGORY && !resolvedCategory) {
+      setError('Enter your custom category, or pick one from the list.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { business, location } = await createBusiness({
         name: trimmedName,
-        category: category || null,
+        category: resolvedCategory || null,
         city: city.trim() || null,
         timezone,
         postDays,
@@ -310,7 +321,7 @@ export function AddBusinessPage() {
       {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
       {notice ? <SuccessBanner message={notice} /> : null}
 
-      <section className="mx-auto max-w-2xl rounded-xl border border-slate-800 bg-slate-900/50 p-5 sm:p-6">
+      <section className="mx-auto max-w-3xl rounded-xl border border-slate-800 bg-slate-900/50 p-6 sm:p-8">
         {step === 'form' ? (
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
@@ -342,8 +353,20 @@ export function AddBusinessPage() {
                         {opt}
                       </SelectItem>
                     ))}
+                    <SelectItem value={CUSTOM_CATEGORY}>+ Add custom category…</SelectItem>
                   </SelectContent>
                 </Select>
+                {category === CUSTOM_CATEGORY ? (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    disabled={submitting}
+                    className={`${inputClass} mt-2`}
+                    placeholder="Type your category, e.g. Roofing"
+                  />
+                ) : null}
               </div>
 
               <div>

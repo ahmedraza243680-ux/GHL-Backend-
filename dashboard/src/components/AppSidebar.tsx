@@ -59,7 +59,7 @@ export function AppSidebar({ onNavigate, className }: AppSidebarProps) {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">Peakwa</p>
-            <p className="text-xs text-slate-500">Admin Dashboard</p>
+            <p className="text-xs text-slate-500">GBP Automation</p>
           </div>
         </div>
       </div>

@@ -37,7 +37,7 @@ export function Layout() {
 
             <div className="min-w-0 flex-1">
               <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 sm:px-4 sm:text-sm">
-                <span className="truncate">Peakwa Admin Dashboard</span>
+                <span className="truncate">Peakwa GBP Automation</span>
               </div>
             </div>
           </div>

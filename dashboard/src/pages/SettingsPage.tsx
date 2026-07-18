@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { CalendarClock, MapPin, Plus, SlidersHorizontal, Tag, Type, X } from 'lucide-react';
 import {
   fetchLocationSchedule,
   updateLocationMaxPostLength,
@@ -23,6 +23,13 @@ import {
   CardTitle,
 } from '../components/ui/card';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,6 +40,7 @@ import { ListSkeleton } from '../components/ui/skeleton';
 import { TimePicker, type TimeParts } from '../components/ui/time-picker';
 import { useLocations } from '../contexts/LocationsContext';
 import type { LocationSchedule } from '../types';
+import type { Location } from '../types/location';
 import { cn } from '../lib/utils';
 
 const WEEKDAYS = [
@@ -179,13 +187,13 @@ function SettingsField({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <div>
-        <p className="text-sm font-medium text-slate-200">{label}</p>
-        {hint ? <p className="mt-0.5 text-xs text-slate-500">{hint}</p> : null}
+    <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-5 sm:p-6">
+      <div className="mb-5 border-b border-slate-800/70 pb-3">
+        <h3 className="text-sm font-semibold text-slate-100">{label}</h3>
+        {hint ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p> : null}
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -528,6 +536,8 @@ export function SettingsPage() {
   const [postLengthForms, setPostLengthForms] = useState<Record<string, string>>({});
   const [postLengthSavingId, setPostLengthSavingId] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   useEffect(() => {
     setTownForms((prev) => {
       const next = { ...prev };
@@ -804,6 +814,142 @@ export function SettingsPage() {
     }
   }
 
+  function renderSettingsPanels(loc: Location) {
+    const form = forms[loc.id];
+    if (!form) return null;
+    const daysOk = form.postDays.length === form.postsPerWeek;
+
+    return (
+      <div className="space-y-5">
+        <SettingsField
+          label="Posting frequency"
+          hint="How many days per week to post, and which days of the week."
+        >
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-4">
+            <div className="shrink-0 space-y-2 sm:w-[148px]">
+              <p className="text-xs font-medium text-slate-400">Posts per week</p>
+              <Select
+                value={String(form.postsPerWeek)}
+                onValueChange={(v) => handlePostsPerWeekChange(loc.id, v)}
+              >
+                <SelectTrigger className="h-11 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 7 }, (_, i) => i + 1).map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n} {n === 1 ? 'day' : 'days'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="text-xs text-slate-500">
+                <span className="font-medium text-slate-400">Posting days</span>
+                {' · '}
+                {form.postDays.length} selected
+              </p>
+              <div className="grid grid-cols-7 gap-2">
+                {WEEKDAYS.map((day) => {
+                  const checked = form.postDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleDay(loc.id, day)}
+                      className={cn(
+                        'h-11 rounded-lg border text-center text-sm font-medium transition-colors',
+                        checked
+                          ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300'
+                          : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-slate-200',
+                      )}
+                    >
+                      {day.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </SettingsField>
+
+        <SettingsField label="Schedule" hint="One row per posting day.">
+          <PerDayScheduleTable
+            postDays={form.postDays}
+            postDayTypes={form.postDayTypes}
+            postDayTimes={form.postDayTimes}
+            postsPerWeek={form.postsPerWeek}
+            timezone={form.timezone}
+            disabled={savingId === loc.id}
+            onDayTypeChange={(day, type) => setDayPostType(loc.id, day, type)}
+            onDayTimeChange={(day, time) => setDayPostTime(loc.id, day, time)}
+            onApplySameTime={(time) => applySameTimeToAllDays(loc.id, time)}
+            onRotateTypes={() => rotateTypesForDays(loc.id)}
+          />
+          <div className="mt-5 flex justify-end border-t border-slate-800/70 pt-4">
+            <Button
+              type="button"
+              disabled={savingId === loc.id || !daysOk}
+              onClick={() => void handleSave(loc.id, loc.businessName)}
+            >
+              {savingId === loc.id ? 'Saving…' : 'Save schedule'}
+            </Button>
+          </div>
+        </SettingsField>
+
+        <SettingsField
+          label="Towns"
+          hint="Posts pick a random town from this list. Empty falls back to the location's home city."
+        >
+          <TownsSection
+            towns={townForms[loc.id] ?? []}
+            inputValue={newTownInputs[loc.id] ?? ''}
+            disabled={townsSavingId === loc.id}
+            onInputChange={(value) =>
+              setNewTownInputs((prev) => ({ ...prev, [loc.id]: value }))
+            }
+            onAdd={() => addTown(loc.id)}
+            onRemove={(town) => removeTown(loc.id, town)}
+            onSave={() => void handleSaveTowns(loc.id, loc.businessName)}
+            saving={townsSavingId === loc.id}
+          />
+        </SettingsField>
+
+        <SettingsField
+          label="Offer Settings"
+          hint="Used on OFFER posts. Leave blank to omit — a coupon or URL is never fabricated."
+        >
+          <OfferSettingsSection
+            form={offerForms[loc.id] ?? { couponCode: '', terms: '', redeemUrl: '' }}
+            disabled={offerSavingId === loc.id}
+            onChange={(patch) => patchOfferForm(loc.id, patch)}
+            onSave={() => void handleSaveOfferConfig(loc.id, loc.businessName)}
+            saving={offerSavingId === loc.id}
+          />
+        </SettingsField>
+
+        <SettingsField
+          label="Post Length"
+          hint={`Max words per generated post (${MIN_POST_LENGTH}-${MAX_POST_LENGTH}). Defaults to ${DEFAULT_POST_LENGTH}.`}
+        >
+          <PostLengthSection
+            value={postLengthForms[loc.id] ?? String(DEFAULT_POST_LENGTH)}
+            disabled={postLengthSavingId === loc.id}
+            onChange={(value) =>
+              setPostLengthForms((prev) => ({ ...prev, [loc.id]: value }))
+            }
+            onSave={() => void handleSavePostLength(loc.id, loc.businessName)}
+            saving={postLengthSavingId === loc.id}
+          />
+        </SettingsField>
+      </div>
+    );
+  }
+
+  const editingLoc = editingId ? locations.find((l) => l.id === editingId) ?? null : null;
+
   return (
     <div className="w-full space-y-6 pb-10">
       <PageHeader
@@ -817,153 +963,112 @@ export function SettingsPage() {
       {locationsLoading || loading ? (
         <ListSkeleton count={3} />
       ) : (
-        <div className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {locations.map((loc) => {
             const form = forms[loc.id];
             if (!form) return null;
             const daysOk = form.postDays.length === form.postsPerWeek;
             const ordered = WEEKDAYS.filter((d) => form.postDays.includes(d));
+            const townCount = (townForms[loc.id] ?? []).length;
+            const postLen =
+              postLengthForms[loc.id] ?? String(loc.maxPostLength ?? DEFAULT_POST_LENGTH);
 
             return (
-              <Card key={loc.id} className="overflow-hidden">
-                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/80">
-                  <div className="min-w-0">
-                    <CardTitle className="text-lg">{loc.businessName}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {form.postsPerWeek} posting day{form.postsPerWeek === 1 ? '' : 's'}
-                      {ordered.length > 0
-                        ? ` · ${ordered.map((d) => d.slice(0, 3)).join(', ')}`
-                        : ''}
-                    </CardDescription>
+              <Card key={loc.id} className="flex flex-col">
+                <CardHeader className="gap-1 p-5 pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="min-w-0 truncate text-base">
+                      {loc.businessName}
+                    </CardTitle>
+                    {!daysOk ? (
+                      <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-500/20">
+                        Needs review
+                      </span>
+                    ) : null}
                   </div>
-                  <Button
-                    type="button"
-                    disabled={savingId === loc.id || !daysOk}
-                    onClick={() => void handleSave(loc.id, loc.businessName)}
-                  >
-                    {savingId === loc.id ? 'Saving…' : 'Save schedule'}
-                  </Button>
+                  <CardDescription className="flex items-center gap-1.5">
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    {form.postsPerWeek} post{form.postsPerWeek === 1 ? '' : 's'} / week
+                  </CardDescription>
                 </CardHeader>
 
-                <CardContent className="space-y-8 p-6 lg:p-8">
-                  <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-4">
-                    <div className="shrink-0 space-y-2 sm:w-[148px]">
-                      <p className="text-sm font-medium text-slate-200">Posts per week</p>
-                      <Select
-                        value={String(form.postsPerWeek)}
-                        onValueChange={(v) => handlePostsPerWeekChange(loc.id, v)}
-                      >
-                        <SelectTrigger className="h-11 w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 7 }, (_, i) => i + 1).map((n) => (
-                            <SelectItem key={n} value={String(n)}>
-                              {n} {n === 1 ? 'day' : 'days'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <p className="text-sm text-slate-500">
-                        <span className="font-medium text-slate-200">Posting days</span>
-                        {' · '}
-                        {form.postDays.length} selected
-                      </p>
-                      <div className="grid grid-cols-7 gap-2">
-                        {WEEKDAYS.map((day) => {
-                          const checked = form.postDays.includes(day);
-                          return (
-                            <button
-                              key={day}
-                              type="button"
-                              onClick={() => toggleDay(loc.id, day)}
-                              className={cn(
-                                'h-11 rounded-lg border text-center text-sm font-medium transition-colors',
-                                checked
-                                  ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300'
-                                  : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-slate-200',
-                              )}
-                            >
-                              {day.slice(0, 3)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                <CardContent className="flex flex-1 flex-col gap-4 p-5 pt-0">
+                  <div className="flex flex-wrap gap-1.5">
+                    {ordered.length > 0 ? (
+                      ordered.map((d) => (
+                        <span
+                          key={d}
+                          className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/20"
+                        >
+                          {d.slice(0, 3)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500">No days selected</span>
+                    )}
                   </div>
 
-                  <SettingsField
-                    label="Schedule"
-                    hint="One row per posting day."
-                  >
-                    <PerDayScheduleTable
-                      postDays={form.postDays}
-                      postDayTypes={form.postDayTypes}
-                      postDayTimes={form.postDayTimes}
-                      postsPerWeek={form.postsPerWeek}
-                      timezone={form.timezone}
-                      disabled={savingId === loc.id}
-                      onDayTypeChange={(day, type) => setDayPostType(loc.id, day, type)}
-                      onDayTimeChange={(day, time) => setDayPostTime(loc.id, day, time)}
-                      onApplySameTime={(time) => applySameTimeToAllDays(loc.id, time)}
-                      onRotateTypes={() => rotateTypesForDays(loc.id)}
-                    />
-                  </SettingsField>
+                  <dl className="grid grid-cols-2 gap-y-2 text-xs text-slate-400">
+                    <dt className="sr-only">Post length</dt>
+                    <dd className="flex items-center gap-1.5">
+                      <Type className="h-3.5 w-3.5 text-slate-500" />
+                      {postLen} words
+                    </dd>
+                    <dt className="sr-only">Service towns</dt>
+                    <dd className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-slate-500" />
+                      {townCount} town{townCount === 1 ? '' : 's'}
+                    </dd>
+                    <dt className="sr-only">Offer configured</dt>
+                    <dd className="col-span-2 flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5 text-slate-500" />
+                      {(offerForms[loc.id]?.couponCode ?? '').trim()
+                        ? `Offer: ${offerForms[loc.id]?.couponCode}`
+                        : 'No offer set'}
+                    </dd>
+                  </dl>
 
-                  <SettingsField
-                    label="Towns"
-                    hint="Posts pick a random town from this list. Empty falls back to the location's home city."
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-auto w-full"
+                    onClick={() => setEditingId(loc.id)}
                   >
-                    <TownsSection
-                      towns={townForms[loc.id] ?? []}
-                      inputValue={newTownInputs[loc.id] ?? ''}
-                      disabled={townsSavingId === loc.id}
-                      onInputChange={(value) =>
-                        setNewTownInputs((prev) => ({ ...prev, [loc.id]: value }))
-                      }
-                      onAdd={() => addTown(loc.id)}
-                      onRemove={(town) => removeTown(loc.id, town)}
-                      onSave={() => void handleSaveTowns(loc.id, loc.businessName)}
-                      saving={townsSavingId === loc.id}
-                    />
-                  </SettingsField>
-
-                  <SettingsField
-                    label="Offer Settings"
-                    hint="Used on OFFER posts. Leave blank to omit — a coupon or URL is never fabricated."
-                  >
-                    <OfferSettingsSection
-                      form={offerForms[loc.id] ?? { couponCode: '', terms: '', redeemUrl: '' }}
-                      disabled={offerSavingId === loc.id}
-                      onChange={(patch) => patchOfferForm(loc.id, patch)}
-                      onSave={() => void handleSaveOfferConfig(loc.id, loc.businessName)}
-                      saving={offerSavingId === loc.id}
-                    />
-                  </SettingsField>
-
-                  <SettingsField
-                    label="Post Length"
-                    hint={`Max words per generated post (${MIN_POST_LENGTH}-${MAX_POST_LENGTH}). Defaults to ${DEFAULT_POST_LENGTH}.`}
-                  >
-                    <PostLengthSection
-                      value={postLengthForms[loc.id] ?? String(DEFAULT_POST_LENGTH)}
-                      disabled={postLengthSavingId === loc.id}
-                      onChange={(value) =>
-                        setPostLengthForms((prev) => ({ ...prev, [loc.id]: value }))
-                      }
-                      onSave={() => void handleSavePostLength(loc.id, loc.businessName)}
-                      saving={postLengthSavingId === loc.id}
-                    />
-                  </SettingsField>
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Edit settings
+                  </Button>
                 </CardContent>
               </Card>
             );
           })}
         </div>
       )}
+
+      <Dialog
+        open={Boolean(editingLoc)}
+        onOpenChange={(open) => {
+          if (!open) setEditingId(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          {editingLoc ? (
+            <>
+              <DialogHeader className="pr-8">
+                <DialogTitle>{editingLoc.businessName}</DialogTitle>
+                <DialogDescription>
+                  Posting schedule, service towns, offers and post length for this
+                  location.
+                </DialogDescription>
+              </DialogHeader>
+
+              {error && <ErrorBanner message={error} />}
+              {success && <SuccessBanner message={success} />}
+
+              {renderSettingsPanels(editingLoc)}
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

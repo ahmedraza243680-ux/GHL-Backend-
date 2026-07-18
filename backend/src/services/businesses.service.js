@@ -105,3 +105,28 @@ export async function createBusinessWithLocation(body) {
 
   return { business, location, schedule };
 }
+
+/**
+ * Permanently deletes a business and everything linked to it. The Location ->
+ * Business relation is onDelete: Cascade, and posts/media/schedules/audit logs
+ * cascade from Location, so removing the business tears down the whole tree.
+ */
+export async function deleteBusinessById(businessId) {
+  const id = String(businessId ?? '').trim();
+  if (!id) {
+    throw new AppError('businessId is required.', 400, { code: 'INVALID_PARAMS' });
+  }
+
+  try {
+    const deleted = await prisma.business.delete({
+      where: { id },
+      select: { id: true, name: true },
+    });
+    return deleted;
+  } catch (e) {
+    if (e.code === 'P2025') {
+      throw new AppError('Business not found.', 404, { code: 'BUSINESS_NOT_FOUND' });
+    }
+    throw e;
+  }
+}

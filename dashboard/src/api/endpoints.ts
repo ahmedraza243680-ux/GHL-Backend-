@@ -59,6 +59,15 @@ export async function createBusiness(
   return data.data;
 }
 
+export async function deleteBusiness(
+  businessId: string,
+): Promise<{ id: string; name: string }> {
+  const { data } = await api.delete<ApiResponse<{ id: string; name: string }>>(
+    `/businesses/${businessId}`,
+  );
+  return data.data;
+}
+
 export async function getGoogleAuthUrl(locationId: string): Promise<string> {
   const { data } = await api.get<ApiResponse<{ url: string }>>('/auth/google/url', {
     params: { state: locationId },

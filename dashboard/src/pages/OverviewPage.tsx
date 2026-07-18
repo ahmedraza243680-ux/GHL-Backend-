@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchLocationSummaries, runDailyJob } from '../api/endpoints';
+import { Trash2 } from 'lucide-react';
+import { deleteBusiness, fetchLocationSummaries, runDailyJob } from '../api/endpoints';
 import {
   ErrorBanner,
   StatusBadge,
   SuccessBanner,
 } from '../components/ui';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { CardGridSkeleton } from '../components/ui/skeleton';
+import { useLocations } from '../contexts/LocationsContext';
 import type { LocationSummary } from '../types/location';
 import { formatDate, isToday } from '../utils/format';
 
@@ -16,11 +28,14 @@ function hasLivePostToday(summary: LocationSummary): boolean {
 }
 
 export function OverviewPage() {
+  const { refresh: refreshLocations } = useLocations();
   const [summaries, setSummaries] = useState<LocationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [jobRunning, setJobRunning] = useState(false);
   const [jobMessage, setJobMessage] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<LocationSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -62,6 +77,23 @@ export function OverviewPage() {
       setError(err instanceof Error ? err.message : 'Daily job failed');
     } finally {
       setJobRunning(false);
+    }
+  }
+
+  async function handleDeleteBusiness() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError(null);
+    setJobMessage(null);
+    try {
+      await deleteBusiness(deleteTarget.businessId);
+      setJobMessage(`"${deleteTarget.businessName}" was deleted.`);
+      setDeleteTarget(null);
+      await Promise.all([loadData(), refreshLocations()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete business');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -112,12 +144,23 @@ export function OverviewPage() {
                     GHL: {summary.ghlLocationId}
                   </p>
                 </div>
-                {hasLivePostToday(summary) ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    Live
-                  </span>
-                ) : null}
+                <div className="flex items-center gap-2">
+                  {hasLivePostToday(summary) ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      Live
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(summary)}
+                    aria-label={`Delete ${summary.businessName}`}
+                    title="Delete business"
+                    className="rounded-lg border border-slate-700 p-2 text-slate-400 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <dl className="space-y-3 text-sm">
@@ -169,6 +212,39 @@ export function OverviewPage() {
           ))}
         </div>
       )}
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this business?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes{' '}
+              <span className="font-medium text-slate-200">
+                {deleteTarget?.businessName}
+              </span>{' '}
+              and all of its posts, media, and schedule. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="danger"
+              loading={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteBusiness();
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Delete business'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
