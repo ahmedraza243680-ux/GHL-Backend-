@@ -190,27 +190,57 @@ export async function getGoogleOAuthCallback(req, res, next) {
     .badge { width: 48px; height: 48px; margin: 0 auto 1rem; border-radius: 9999px; background: rgba(16,185,129,0.15); color: #34d399; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
     h1 { font-size: 1.125rem; margin: 0 0 0.5rem; color: #f8fafc; }
     p { color: #94a3b8; font-size: 0.875rem; margin: 0; }
+    button { display: none; margin-top: 1.25rem; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 500; color: #fff; background: #059669; border: 0; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #10b981; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="badge">&#10003;</div>
     <h1>Google account linked</h1>
-    <p>You can return to the dashboard. This window will close automatically&hellip;</p>
+    <p id="status">You can return to the dashboard. This window will close automatically&hellip;</p>
+    <button id="closeBtn" type="button">Close window</button>
   </div>
   <script>
     (function () {
       var message = { type: 'peakwa-google-oauth', status: 'success', locationId: ${JSON.stringify(
         locationId,
       )} };
+
+      // Tell the dashboard we're done so it can advance immediately.
       try {
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage(message, '*');
         }
-      } catch (e) { /* opener may be gone or cross-origin restricted */ }
+      } catch (e) { /* opener may be severed by the OAuth cross-origin flow */ }
+
+      function tryClose() {
+        try { window.close(); } catch (e) { /* blocked */ }
+      }
+
+      // On a user click we can reset the window to a single-history,
+      // script-closable context, which lets close() work even after the OAuth
+      // redirect chain severed the opener relationship.
+      function forceClose() {
+        try { window.open('', '_self'); } catch (e) { /* ignore */ }
+        window.close();
+      }
+
+      // Browsers only auto-close windows they consider "script-closable". The
+      // Google OAuth redirect chain can strip that, so if close() is ignored we
+      // fall back to an explicit, user-clickable close button.
+      tryClose();
+      setTimeout(tryClose, 400);
       setTimeout(function () {
-        try { window.close(); } catch (e) { /* ignore */ }
-      }, 400);
+        if (window.closed) return;
+        var status = document.getElementById('status');
+        var btn = document.getElementById('closeBtn');
+        if (status) status.textContent = 'You can now close this window and return to the dashboard.';
+        if (btn) {
+          btn.style.display = 'inline-block';
+          btn.onclick = forceClose;
+        }
+      }, 1000);
     })();
   </script>
 </body>
