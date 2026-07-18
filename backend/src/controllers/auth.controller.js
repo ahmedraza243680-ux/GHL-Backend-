@@ -17,14 +17,6 @@ function signLocationSession(locationId) {
   );
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 export function getAuthUrl(req, res, next) {
   try {
     const state = req.query.state ? String(req.query.state) : undefined;
@@ -190,18 +182,37 @@ export async function getGoogleOAuthCallback(req, res, next) {
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Google connected</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
-    pre { background: #f4f4f5; padding: 1rem; overflow-x: auto; font-size: 0.75rem; word-break: break-all; }
-    .hint { color: #52525b; font-size: 0.875rem; }
+    body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0f172a; color: #e2e8f0; }
+    .card { text-align: center; max-width: 24rem; padding: 2.5rem 2rem; border: 1px solid #1e293b; border-radius: 16px; background: #111827; }
+    .badge { width: 48px; height: 48px; margin: 0 auto 1rem; border-radius: 9999px; background: rgba(16,185,129,0.15); color: #34d399; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+    h1 { font-size: 1.125rem; margin: 0 0 0.5rem; color: #f8fafc; }
+    p { color: #94a3b8; font-size: 0.875rem; margin: 0; }
   </style>
 </head>
 <body>
-  <h1>Google account linked</h1>
-  <p>Location ID: <code>${escapeHtml(locationId)}</code></p>
-  <p class="hint">Session JWT (use as Bearer token for protected routes you add later):</p>
-  <pre>${escapeHtml(token)}</pre>
+  <div class="card">
+    <div class="badge">&#10003;</div>
+    <h1>Google account linked</h1>
+    <p>You can return to the dashboard. This window will close automatically&hellip;</p>
+  </div>
+  <script>
+    (function () {
+      var message = { type: 'peakwa-google-oauth', status: 'success', locationId: ${JSON.stringify(
+        locationId,
+      )} };
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(message, '*');
+        }
+      } catch (e) { /* opener may be gone or cross-origin restricted */ }
+      setTimeout(function () {
+        try { window.close(); } catch (e) { /* ignore */ }
+      }, 400);
+    })();
+  </script>
 </body>
 </html>`;
     return res.type('html').send(html);

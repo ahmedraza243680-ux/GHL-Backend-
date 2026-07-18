@@ -138,6 +138,7 @@ export function AddBusinessPage() {
   const [awaitingOAuth, setAwaitingOAuth] = useState(false);
   const [consentUrl, setConsentUrl] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const popupRef = useRef<Window | null>(null);
 
   // Step 3 (select) state
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
@@ -154,7 +155,16 @@ export function AddBusinessPage() {
     }
   }, []);
 
-  useEffect(() => stopPolling, [stopPolling]);
+  useEffect(() => {
+    return () => {
+      stopPolling();
+      try {
+        popupRef.current?.close();
+      } catch {
+        // Ignore — nothing we can do if the popup can't be closed.
+      }
+    };
+  }, [stopPolling]);
 
   function toggleDay(day: string) {
     setPostDays((prev) =>
@@ -207,12 +217,48 @@ export function AddBusinessPage() {
   }
 
   const proceedToSelect = useCallback((found: GoogleAccount[]) => {
+    // Close the OAuth popup once we've detected the connection so the user
+    // doesn't have to dismiss the "Google account linked" page manually.
+    try {
+      popupRef.current?.close();
+    } catch {
+      // Ignore — popup may already be closed or blocked from closing.
+    }
+    popupRef.current = null;
     setAccounts(found);
     setSelectedAccountId((prev) => prev || found[0]?.accountId || '');
     setAwaitingOAuth(false);
     setNotice('Google connected. Choose the Business Profile location that matches this business.');
     setStep('select');
   }, []);
+
+  // The OAuth callback page posts a message when it links the account, then
+  // closes itself. React to it immediately instead of waiting for the poll.
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const data = event.data as
+        | { type?: string; status?: string; locationId?: string }
+        | null;
+      if (!data || data.type !== 'peakwa-google-oauth' || data.status !== 'success') return;
+      if (!newLocationId || (data.locationId && data.locationId !== newLocationId)) return;
+
+      // The message only signals completion — confirm real tokens exist before
+      // advancing, so a stray/spoofed message can never fake a connection.
+      void fetchGoogleAccounts(newLocationId)
+        .then((found) => {
+          if (found && found.length > 0) {
+            stopPolling();
+            proceedToSelect(found);
+          }
+        })
+        .catch(() => {
+          // Ignore — polling remains as the fallback.
+        });
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [newLocationId, proceedToSelect, stopPolling]);
 
   const startPolling = useCallback(
     (locationId: string) => {
@@ -238,7 +284,7 @@ export function AddBusinessPage() {
     try {
       const url = await getGoogleAuthUrl(newLocationId);
       setConsentUrl(url);
-      window.open(url, 'peakwa-google-oauth', 'width=520,height=720');
+      popupRef.current = window.open(url, 'peakwa-google-oauth', 'width=520,height=720');
       setAwaitingOAuth(true);
       startPolling(newLocationId);
     } catch (err) {

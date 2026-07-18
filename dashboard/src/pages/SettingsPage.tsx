@@ -187,8 +187,8 @@ function SettingsField({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-5 sm:p-6">
-      <div className="mb-5 border-b border-slate-800/70 pb-3">
+    <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-6">
+      <div className="mb-4 border-b border-slate-800/70 pb-3 sm:mb-5">
         <h3 className="text-sm font-semibold text-slate-100">{label}</h3>
         {hint ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p> : null}
       </div>
@@ -273,7 +273,53 @@ function PerDayScheduleTable({
         </Button>
       </div>
 
-      <div className="w-full overflow-x-auto rounded-xl border border-slate-700/80">
+      {/* Mobile: one stacked card per day (table doesn't fit narrow screens) */}
+      <div className="space-y-3 sm:hidden">
+        {ordered.map((day) => (
+          <div
+            key={day}
+            className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4"
+          >
+            <p className="mb-3 text-sm font-semibold text-slate-200">{day}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                  Post type
+                </label>
+                <Select
+                  value={postDayTypes[day] ?? 'UPDATE'}
+                  onValueChange={(value) => onDayTypeChange(day, value)}
+                  disabled={disabled}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROTATION_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {POST_TYPE_INFO[type]?.label ?? type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                  Time ({timezone.replace(/_/g, ' ')})
+                </label>
+                <TimePicker
+                  value={postTimeToParts(postDayTimes[day] ?? '09:00')}
+                  disabled={disabled}
+                  onChange={(parts) => onDayTimeChange(day, partsToPostTime(parts))}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop/tablet: table */}
+      <div className="hidden w-full overflow-x-auto rounded-xl border border-slate-700/80 sm:block">
         <table className="w-full min-w-[520px] border-collapse text-left">
           <thead>
             <tr className="border-b border-slate-800 bg-slate-900/90 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -820,7 +866,7 @@ export function SettingsPage() {
     const daysOk = form.postDays.length === form.postsPerWeek;
 
     return (
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         <SettingsField
           label="Posting frequency"
           hint="How many days per week to post, and which days of the week."
@@ -851,7 +897,7 @@ export function SettingsPage() {
                 {' · '}
                 {form.postDays.length} selected
               </p>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7 sm:gap-2">
                 {WEEKDAYS.map((day) => {
                   const checked = form.postDays.includes(day);
                   return (
@@ -860,7 +906,7 @@ export function SettingsPage() {
                       type="button"
                       onClick={() => toggleDay(loc.id, day)}
                       className={cn(
-                        'h-11 rounded-lg border text-center text-sm font-medium transition-colors',
+                        'h-10 rounded-lg border px-0 text-center text-xs font-medium transition-colors sm:h-11 sm:text-sm',
                         checked
                           ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300'
                           : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-slate-200',
