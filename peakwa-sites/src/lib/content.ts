@@ -40,12 +40,21 @@ export type ContactContent = {
   seo?: SeoContent;
 };
 
+export type BlogSection = { heading?: string; paragraphs?: string[] };
+
+export type BlogFaq = { question?: string; answer?: string };
+
 export type BlogPost = {
   title?: string;
   excerpt?: string;
+  /** Legacy flat body for posts generated before the structured format. */
   content?: string;
   category?: string;
   readTime?: string;
+  introduction?: string;
+  sections?: BlogSection[];
+  conclusion?: string;
+  faqs?: BlogFaq[];
 };
 
 export type BlogContent = {

@@ -14,6 +14,11 @@ import { getTextColor, hexToRgb, resolveTheme } from '@/src/lib/theme';
 
 type PageProps = { params: Promise<{ slug: string; postIndex: string }> };
 
+function colorWithOpacity(hex: string, opacity: number) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug, postIndex } = await params;
   const site = await getSiteBySlug(slug);
@@ -31,68 +36,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-function colorWithOpacity(hex: string, opacity: number) {
-  const { r, g, b } = hexToRgb(hex);
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-}
-
+/** Legacy posts store a single flat string; split it into clean paragraphs. */
 function splitParagraphs(content: string): string[] {
   return content
     .split(/\n\n+|\.\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => (p.endsWith('.') ? p : `${p}.`));
-}
-
-function headingFromParagraph(paragraph: string): string {
-  const words = paragraph.replace(/[.!?]+$/, '').split(/\s+/).filter(Boolean).slice(0, 6);
-  if (words.length === 0) return 'More Details';
-  const heading = words.join(' ');
-  return heading.charAt(0).toUpperCase() + heading.slice(1);
-}
-
-function topicFromTitle(title: string): string {
-  const cleaned = title
-    .replace(/^(a|an|the)\s+/i, '')
-    .replace(/[.!?]+$/, '')
-    .trim();
-  return cleaned || 'this topic';
-}
-
-type ContentBlock =
-  | { type: 'paragraph'; text: string }
-  | { type: 'heading'; text: string };
-
-function buildContentBlocks(paragraphs: string[]): ContentBlock[] {
-  if (paragraphs.length === 0) return [];
-
-  const blocks: ContentBlock[] = [];
-  let i = 0;
-
-  // First 2 paragraphs
-  const firstCount = Math.min(2, paragraphs.length);
-  for (; i < firstCount; i++) {
-    blocks.push({ type: 'paragraph', text: paragraphs[i]! });
-  }
-
-  // H2 + next 2 paragraphs
-  if (i < paragraphs.length) {
-    blocks.push({ type: 'heading', text: headingFromParagraph(paragraphs[i]!) });
-    const midEnd = Math.min(i + 2, paragraphs.length);
-    for (; i < midEnd; i++) {
-      blocks.push({ type: 'paragraph', text: paragraphs[i]! });
-    }
-  }
-
-  // H2 + remaining paragraphs
-  if (i < paragraphs.length) {
-    blocks.push({ type: 'heading', text: headingFromParagraph(paragraphs[i]!) });
-    for (; i < paragraphs.length; i++) {
-      blocks.push({ type: 'paragraph', text: paragraphs[i]! });
-    }
-  }
-
-  return blocks;
+    .map((p) => (/[.!?]$/.test(p) ? p : `${p}.`));
 }
 
 export default async function BlogPostPage({ params }: PageProps) {
@@ -108,24 +58,20 @@ export default async function BlogPostPage({ params }: PageProps) {
 
   const theme = resolveTheme(site);
   const blogImage = images.blog[index] ?? null;
-  const paragraphs = splitParagraphs(post.content || '');
-  const contentBlocks = buildContentBlocks(paragraphs);
-  const topic = topicFromTitle(post.title || 'this topic');
 
-  const faqs = [
-    {
-      question: `What is ${topic}?`,
-      answer: paragraphs[0] || post.excerpt || '',
-    },
-    {
-      question: `How does ${site.businessName} help with ${topic}?`,
-      answer: paragraphs[Math.floor(paragraphs.length / 2)] || post.excerpt || '',
-    },
-    {
-      question: `Why choose ${site.businessName} for ${topic}?`,
-      answer: paragraphs[paragraphs.length - 1] || post.excerpt || '',
-    },
-  ].filter((faq) => faq.answer);
+  const sections = (post.sections ?? []).filter(
+    (s) => s && (s.heading || (s.paragraphs?.some((p) => p?.trim()) ?? false)),
+  );
+
+  const faqs = (post.faqs ?? [])
+    .map((f) => ({ question: (f?.question ?? '').trim(), answer: (f?.answer ?? '').trim() }))
+    .filter((f) => f.question && f.answer);
+
+  // Older posts predate the structured format and only have a flat `content`
+  // string. Render it as plain paragraphs (no invented headings) so nothing
+  // breaks until the site is regenerated with structured content.
+  const legacyParagraphs =
+    sections.length === 0 ? splitParagraphs(post.content || '') : [];
 
   return (
     <>
@@ -190,33 +136,56 @@ export default async function BlogPostPage({ params }: PageProps) {
             </p>
           </div>
 
-          <h1 className="mt-6 text-3xl font-bold text-gray-900">{post.title}</h1>
+          <h1 className="mt-6 text-3xl font-bold text-gray-900 md:text-4xl">{post.title}</h1>
           <p className="mt-3 text-sm text-gray-500">Author: {site.businessName}</p>
 
           <div className="my-8 h-px w-full bg-gray-200" />
 
           <article className="max-w-none text-gray-700">
-            {contentBlocks.map((block, i) =>
-              block.type === 'heading' ? (
-                <h2 key={`h-${i}`} className="mb-4 mt-10 text-2xl font-bold text-gray-900">
-                  {block.text}
-                </h2>
-              ) : (
-                <p key={`p-${i}`} className="mb-6 text-lg leading-relaxed">
-                  {block.text}
-                </p>
-              ),
-            )}
+            {post.introduction ? (
+              <p className="mb-8 text-xl leading-relaxed text-gray-800">{post.introduction}</p>
+            ) : null}
+
+            {sections.map((section, i) => (
+              <section key={`section-${i}`} className="mb-8">
+                {section.heading ? (
+                  <h2 className="mb-4 mt-10 text-2xl font-bold text-gray-900">
+                    {section.heading}
+                  </h2>
+                ) : null}
+                {(section.paragraphs ?? [])
+                  .filter((p) => p?.trim())
+                  .map((paragraph, j) => (
+                    <p key={`p-${i}-${j}`} className="mb-6 text-lg leading-relaxed">
+                      {paragraph}
+                    </p>
+                  ))}
+              </section>
+            ))}
+
+            {legacyParagraphs.map((paragraph, i) => (
+              <p key={`legacy-${i}`} className="mb-6 text-lg leading-relaxed">
+                {paragraph}
+              </p>
+            ))}
+
+            {post.conclusion ? (
+              <p className="mt-8 text-lg font-medium leading-relaxed text-gray-800">
+                {post.conclusion}
+              </p>
+            ) : null}
           </article>
 
-          <div className="my-10 h-px w-full bg-gray-200" />
-
           {faqs.length > 0 ? (
-            <section className="mb-10">
+            <section className="mt-12">
+              <div className="mb-8 h-px w-full bg-gray-200" />
               <h2 className="text-2xl font-bold text-gray-900">Frequently Asked Questions</h2>
-              <div className="mt-6 space-y-6">
-                {faqs.map((faq) => (
-                  <div key={faq.question}>
+              <div className="mt-6 space-y-4">
+                {faqs.map((faq, i) => (
+                  <div
+                    key={`faq-${i}`}
+                    className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
+                  >
                     <p className="font-bold text-gray-900">{faq.question}</p>
                     <p className="mt-2 leading-relaxed text-gray-600">{faq.answer}</p>
                   </div>

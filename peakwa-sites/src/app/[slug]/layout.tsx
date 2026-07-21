@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Navbar } from '@/src/components/Navbar';
 import { Footer } from '@/src/components/Footer';
 import { BackToTop } from '@/src/components/BackToTop';
+import { SiteLoader } from '@/src/components/SiteLoader';
 import { API_URL } from '@/src/config/config';
 import { getLocationPages } from '@/src/lib/api';
 import type { GeneratedSite } from '@/src/lib/types';
@@ -58,6 +59,12 @@ export default async function SiteLayout({ children, params }: LayoutProps) {
 
   return (
     <div className={clsx('flex min-h-screen flex-col', fontClass)} style={cssVars}>
+      <SiteLoader
+        businessName={site.businessName}
+        primaryColor={theme.primaryColor}
+        accentColor={theme.accentColor}
+        tagline={`${site.city}, ${site.state}`}
+      />
       <Navbar
         site={site}
         theme={theme}

@@ -79,8 +79,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const content = (await getServicePageContent(slug, serviceSlug)) as ServicePageContent | null;
 
   return {
-    title:
-      content?.seo?.title || `${service.title} | ${site.businessName} | ${site.city}, ${site.state}`,
+    // Title is deterministic and built from the unique per-service title so each
+    // service page stays distinct instead of reusing a generic AI seo.title.
+    title: `${service.title} | ${site.businessName} | ${site.city}, ${site.state}`,
     description:
       content?.seo?.metaDescription ||
       service.shortDescription ||

@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SITE_BASE_URL } from '@/src/config/config';
-import { ArrowRight, Phone, Quote, Star } from 'lucide-react';
+import { ArrowRight, ChevronDown, Phone, Quote, Star } from 'lucide-react';
 import { CtaBanner } from '@/src/components/CtaBanner';
-import { LocalBusinessSchema } from '@/src/components/SchemaMarkup';
+import { FAQSchema, LocalBusinessSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
 import { getSiteBySlug } from '@/src/lib/api';
@@ -79,6 +79,66 @@ function getNearbyAreas(city: string, state: string): string[] {
   ];
 }
 
+function buildTrustBadges(city: string) {
+  return [
+    {
+      icon: 'shield',
+      title: 'Licensed & Insured',
+      subtitle: 'Fully certified professionals',
+    },
+    {
+      icon: 'dollar-sign',
+      title: 'Free Estimates',
+      subtitle: 'No-obligation, upfront quotes',
+    },
+    {
+      icon: 'thumbs-up',
+      title: 'Satisfaction Guaranteed',
+      subtitle: 'We stand behind our work',
+    },
+    {
+      icon: 'home',
+      title: 'Locally Owned',
+      subtitle: `Proudly serving ${city}`,
+    },
+  ];
+}
+
+function buildFaqs(
+  businessName: string,
+  city: string,
+  state: string,
+  industry: string,
+  phone: string | null | undefined,
+): { question: string; answer: string }[] {
+  const contactSentence = phone
+    ? `Call us at ${phone}`
+    : 'Reach out through our contact page';
+
+  return [
+    {
+      question: `What areas does ${businessName} serve?`,
+      answer: `${businessName} proudly serves ${city}, ${state} and the surrounding communities. If you're nearby and aren't sure whether we cover your area, just give us a call and we'll be glad to help.`,
+    },
+    {
+      question: 'How do I request a quote or schedule service?',
+      answer: `Getting started is simple. ${contactSentence} or fill out the contact form on our website, and we'll respond promptly to discuss your needs and find a time that works for you.`,
+    },
+    {
+      question: `Is ${businessName} licensed and insured?`,
+      answer: `Yes. ${businessName} is fully licensed and insured, so you can have complete peace of mind knowing your ${industry} project is handled by qualified, accountable professionals.`,
+    },
+    {
+      question: 'Do you offer free estimates?',
+      answer: `Absolutely. We provide free, no-obligation estimates for your ${industry} needs in ${city}. You'll get clear, upfront pricing with no hidden fees before any work begins.`,
+    },
+    {
+      question: `What makes ${businessName} different from other ${industry} providers?`,
+      answer: `As a locally owned business in ${city}, we pair professional expertise with genuine, personal customer care. We treat every customer like a neighbor and take real pride in the quality of our work.`,
+    },
+  ];
+}
+
 function buildTestimonials(businessName: string, city: string, industry: string) {
   const names = ['Michael R.', 'Sarah T.', 'David K.'];
   const reviews = [
@@ -123,6 +183,13 @@ export default async function HomePage({ params }: PageProps) {
   const serviceCount = services.length || 6;
   const nearbyAreas = getNearbyAreas(site.city, site.state);
   const testimonials = buildTestimonials(site.businessName, site.city, site.industry);
+  const trustBadges = buildTrustBadges(site.city);
+  const faqs = buildFaqs(site.businessName, site.city, site.state, site.industry, site.phone);
+
+  const areaText = getTextColor(theme.primaryColor);
+  const areaTextIsLight = areaText === '#FFFFFF';
+  const areaMuted = areaTextIsLight ? 'rgba(255,255,255,0.85)' : 'rgba(17,24,39,0.75)';
+  const areaPillBase = areaTextIsLight ? '#FFFFFF' : theme.primaryColor;
 
   const stats = [
     {
@@ -227,6 +294,35 @@ export default async function HomePage({ params }: PageProps) {
           </div>
         </div>
       </section>
+
+      <SectionWrapper
+        background="#fff"
+        className="!py-10"
+        style={{ borderBottom: `1px solid ${colorWithOpacity(theme.primaryColor, 0.1)}` }}
+      >
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          {trustBadges.map((badge) => (
+            <div
+              key={badge.title}
+              className="flex flex-col items-center gap-3 text-center md:flex-row md:gap-4 md:text-left"
+            >
+              <span
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                style={{
+                  backgroundColor: colorWithOpacity(theme.accentColor, 0.12),
+                  color: theme.accentColor,
+                }}
+              >
+                {getIcon(badge.icon, 'w-6 h-6')}
+              </span>
+              <div>
+                <p className="font-bold text-gray-900">{badge.title}</p>
+                <p className="mt-0.5 text-sm text-gray-500">{badge.subtitle}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionWrapper>
 
       <SectionWrapper
         background="#fff"
@@ -455,20 +551,16 @@ export default async function HomePage({ params }: PageProps) {
         </div>
       </SectionWrapper>
 
-      <SectionWrapper
-        background={theme.secondaryColor}
-        className="py-20"
-        style={{ borderBottom: `1px solid ${colorWithOpacity(theme.primaryColor, 0.12)}` }}
-      >
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl font-bold text-gray-900">
+      <SectionWrapper background={theme.primaryColor} className="py-20">
+        <div className="mx-auto max-w-4xl text-center" style={{ color: areaText }}>
+          <h2 className="text-3xl font-bold">
             Serving {site.city} and Surrounding Areas
           </h2>
           <div
             className="mx-auto mt-4 h-1 w-16 rounded-full"
             style={{ backgroundColor: theme.accentColor }}
           />
-          <p className="mt-6 text-lg leading-relaxed text-gray-600">
+          <p className="mt-6 text-lg leading-relaxed" style={{ color: areaMuted }}>
             {site.businessName} is proud to serve {site.city}, {site.state} and the surrounding
             communities. As a local {site.industry} provider, we understand the needs of our
             neighbors and are committed to reliable, friendly service right in your backyard.
@@ -477,14 +569,44 @@ export default async function HomePage({ params }: PageProps) {
             {nearbyAreas.map((area) => (
               <span
                 key={area}
-                className="rounded-full border bg-white px-4 py-2 text-sm font-medium shadow-sm"
+                className="rounded-full border px-4 py-2 text-sm font-medium"
                 style={{
-                  borderColor: colorWithOpacity(theme.primaryColor, 0.2),
-                  color: theme.primaryColor,
+                  borderColor: colorWithOpacity(areaPillBase, 0.3),
+                  backgroundColor: colorWithOpacity(areaPillBase, 0.12),
+                  color: areaText,
                 }}
               >
                 {area}
               </span>
+            ))}
+          </div>
+        </div>
+      </SectionWrapper>
+
+      <FAQSchema faqs={faqs} />
+      <SectionWrapper background="#fff" className="py-20">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-12 text-center">
+            <h2 className="text-3xl font-bold text-gray-900">Frequently Asked Questions</h2>
+            <p className="mt-3 text-lg text-gray-600">
+              Everything you need to know about working with {site.businessName}
+            </p>
+          </div>
+          <div className="space-y-4">
+            {faqs.map((faq) => (
+              <details
+                key={faq.question}
+                className="group rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition open:shadow-md"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
+                  <span>{faq.question}</span>
+                  <ChevronDown
+                    className="h-5 w-5 shrink-0 transition-transform duration-200 group-open:rotate-180"
+                    style={{ color: theme.accentColor }}
+                  />
+                </summary>
+                <p className="mt-4 leading-relaxed text-gray-600">{faq.answer}</p>
+              </details>
             ))}
           </div>
         </div>

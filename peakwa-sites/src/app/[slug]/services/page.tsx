@@ -25,9 +25,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const services = parseJson<ServicesContent>(site.servicesContent, {});
 
   return {
-    title:
-      services?.seo?.title ||
-      `Services | ${site.businessName} | ${site.city}, ${site.state}`,
+    // Title is deterministic and page-distinct so it can never collide with the
+    // home/about titles the way the generic AI-generated seo.title does.
+    title: `Services | ${site.businessName} | ${site.city}, ${site.state}`,
     description:
       services?.seo?.metaDescription ||
       `Professional ${site.industry} services by ${site.businessName} in ${site.city} ${site.state}`,

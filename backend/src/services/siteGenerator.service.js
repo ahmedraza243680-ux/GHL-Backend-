@@ -243,10 +243,15 @@ function buildPagePrompt(businessData, pageSchema, pageType, contextNote = '') {
       ? ' Generate 6 to 8 services that are highly relevant and specific to this exact business type. Each service must be genuinely offered by this type of business. Base services on industry keywords and common offerings in this field.'
       : '';
 
-  return `Generate ${pageType} page content for ${businessName}, a ${industry} business in ${city}, ${state}. ${details}${servicesInstruction} Return ONLY valid JSON matching this exact structure: ${pageSchema}. Stay within all word and character limits. Content must be specific to this business and city.`;
+  const blogInstruction =
+    pageType === 'blog'
+      ? ' Write in-depth, genuinely useful articles with real substance — specific tips, concrete examples, and local relevance to this city. Every post must have a distinct topic, an engaging introduction, multiple sections each with a descriptive heading, a conclusion, and three real FAQs a customer would actually ask. Do not repeat the same points across posts, and avoid filler.'
+      : '';
+
+  return `Generate ${pageType} page content for ${businessName}, a ${industry} business in ${city}, ${state}. ${details}${servicesInstruction}${blogInstruction} Return ONLY valid JSON matching this exact structure: ${pageSchema}. Stay within all word and character limits. Content must be specific to this business and city.`;
 }
 
-async function callOpenAiForPage(systemPrompt, userPrompt) {
+async function callOpenAiForPage(systemPrompt, userPrompt, maxTokens = 2500) {
   const apiKey = env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new AppError('OpenAI is not configured.', 503, { code: 'OPENAI_NOT_CONFIGURED' });
@@ -256,7 +261,7 @@ async function callOpenAiForPage(systemPrompt, userPrompt) {
   const completion = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     temperature: 0.7,
-    max_tokens: 2500,
+    max_tokens: maxTokens,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: systemPrompt },
@@ -292,10 +297,15 @@ export async function generatePageContent(
 ) {
   const userPrompt = buildPagePrompt(businessData, pageSchema, pageType, contextNote);
 
+  // Blog pages are long-form: three articles, each with an intro, several
+  // headed sections, a conclusion, and FAQs. That needs a much larger
+  // completion budget than the short, single-purpose pages.
+  const maxTokens = pageType === 'blog' ? 5000 : 2500;
+
   let lastError;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const raw = await callOpenAiForPage(systemPrompt, userPrompt);
+      const raw = await callOpenAiForPage(systemPrompt, userPrompt, maxTokens);
       return parseJsonContent(raw);
     } catch (e) {
       lastError = e;

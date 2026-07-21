@@ -116,30 +116,56 @@ function buildLocationPageSchema() {
 }
 
 function buildBlogPageSchema() {
-  return {
-    posts: [
+  // A single detailed, well-structured article template. Reused for each of the
+  // three posts so every blog entry is long-form (intro + headed sections +
+  // conclusion + real FAQs) instead of a thin, structureless blob.
+  const post = {
+    title: 'specific, compelling blog post title, max 12 words',
+    excerpt: '40-60 word summary that makes the reader want to open the article',
+    category: 'single word topic category',
+    readTime: 'X min read',
+    introduction:
+      '70-100 word opening paragraph that hooks the reader and introduces the topic in a relatable, specific way',
+    sections: [
       {
-        title: 'max 10 words',
-        excerpt: '40-60 words',
-        content: '200-250 words full blog post',
-        category: 'single word',
-        readTime: 'X min read',
+        heading: 'clear, specific H2 subheading, max 8 words',
+        paragraphs: [
+          '110-150 words of genuinely useful, specific detail',
+          '110-150 words continuing the point with concrete examples or practical advice',
+        ],
       },
       {
-        title: 'max 10 words',
-        excerpt: '40-60 words',
-        content: '200-250 words full blog post',
-        category: 'single word',
-        readTime: 'X min read',
+        heading: 'clear, specific H2 subheading, max 8 words',
+        paragraphs: [
+          '110-150 words of genuinely useful, specific detail',
+          '110-150 words continuing the point with concrete examples or practical advice',
+        ],
       },
       {
-        title: 'max 10 words',
-        excerpt: '40-60 words',
-        content: '200-250 words full blog post',
-        category: 'single word',
-        readTime: 'X min read',
+        heading: 'clear, specific H2 subheading, max 8 words',
+        paragraphs: ['110-150 words of genuinely useful, specific detail'],
       },
     ],
+    conclusion:
+      '60-90 word closing paragraph that summarizes the key takeaway and ends with a natural, non-pushy call to action',
+    faqs: [
+      {
+        question: 'a real question customers ask about this topic',
+        answer: '40-70 word helpful, specific answer',
+      },
+      {
+        question: 'a different real question customers ask about this topic',
+        answer: '40-70 word helpful, specific answer',
+      },
+      {
+        question: 'a third real question customers ask about this topic',
+        answer: '40-70 word helpful, specific answer',
+      },
+    ],
+  };
+
+  return {
+    posts: [post, post, post],
     seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
   };
 }
