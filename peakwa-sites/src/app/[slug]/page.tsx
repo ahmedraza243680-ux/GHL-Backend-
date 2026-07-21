@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { ArrowRight, ChevronDown, MapPin, Phone, Quote, Star } from 'lucide-react';
 import { CtaBanner } from '@/src/components/CtaBanner';
-import { FAQSchema, LocalBusinessSchema } from '@/src/components/SchemaMarkup';
+import { FAQSchema, LocalBusinessSchema, WebSiteSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
 import { getLocationPages, getSiteBySlug } from '@/src/lib/api';
@@ -249,7 +249,8 @@ export default async function HomePage({ params }: PageProps) {
 
   return (
     <>
-      <LocalBusinessSchema site={site} />
+      <LocalBusinessSchema site={site} imageUrl={images.hero} />
+      <WebSiteSchema site={site} />
       <section
         className="relative flex min-h-screen items-center overflow-hidden"
         style={

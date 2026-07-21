@@ -6,7 +6,7 @@ import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { FaqAccordion } from '@/src/components/FaqAccordion';
-import { FAQSchema } from '@/src/components/SchemaMarkup';
+import { FAQSchema, ServiceDetailSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
 import { getServicePageContent, getSiteBySlug } from '@/src/lib/api';
@@ -150,6 +150,12 @@ export default async function ServiceDetailPage({ params }: PageProps) {
 
   return (
     <>
+      <ServiceDetailSchema
+        site={site}
+        serviceTitle={serviceTitle}
+        description={service.fullDescription || service.shortDescription || ''}
+        serviceSlug={serviceSlug}
+      />
       <section className="relative flex min-h-[420px] items-center overflow-hidden md:min-h-[480px]">
         {serviceImage ? (
           <>
@@ -349,6 +355,12 @@ function ServiceDetailFromContent({
 
   return (
     <>
+      <ServiceDetailSchema
+        site={site}
+        serviceTitle={serviceTitle}
+        description={content.overview || ''}
+        serviceSlug={slugifyService(serviceTitle)}
+      />
       <section className="relative flex min-h-[420px] items-center overflow-hidden md:min-h-[480px]">
         {serviceImage ? (
           <>

@@ -4,7 +4,7 @@ import { Clock, MapPin, Phone, Users } from 'lucide-react';
 import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { FaqAccordion } from '@/src/components/FaqAccordion';
-import { FAQSchema } from '@/src/components/SchemaMarkup';
+import { FAQSchema, LocationAreaSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
 import { getLocationPages, getSiteBySlug } from '@/src/lib/api';
@@ -113,6 +113,14 @@ export default async function LocationPage({ params }: PageProps) {
 
   return (
     <>
+      <LocationAreaSchema
+        site={site}
+        city={page.city}
+        county={page.county}
+        state={page.state}
+        locationSlug={locationSlug}
+        imageUrl={heroImage}
+      />
       <section className="relative flex min-h-[420px] items-center overflow-hidden md:min-h-[480px]">
         {heroImage ? (
           <>

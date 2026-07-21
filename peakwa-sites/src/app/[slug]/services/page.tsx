@@ -57,7 +57,7 @@ export default async function ServicesPage({ params }: PageProps) {
 
   return (
     <>
-      <ServiceSchema businessName={site.businessName} services={services} />
+      <ServiceSchema businessName={site.businessName} services={services} businessSlug={slug} />
       <HeroBanner
         site={site}
         heroImage={images.hero}

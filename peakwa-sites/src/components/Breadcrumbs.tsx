@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BreadcrumbListSchema } from '@/src/components/SchemaMarkup';
 import type { GeneratedSite } from '@/src/lib/types';
 import { resolveTheme } from '@/src/lib/theme';
 
@@ -12,7 +13,9 @@ export function Breadcrumbs({ site, items }: BreadcrumbsProps) {
   const base = `/${site.slug}`;
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-8 text-sm text-gray-500">
+    <>
+      <BreadcrumbListSchema site={site} items={items} />
+      <nav aria-label="Breadcrumb" className="mb-8 text-sm text-gray-500">
       <ol className="flex flex-wrap items-center gap-2">
         <li>
           <Link href={base} style={{ color: theme.accentColor }} className="hover:underline">
@@ -33,5 +36,6 @@ export function Breadcrumbs({ site, items }: BreadcrumbsProps) {
         ))}
       </ol>
     </nav>
+    </>
   );
 }
