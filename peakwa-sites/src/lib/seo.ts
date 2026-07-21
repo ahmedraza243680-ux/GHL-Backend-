@@ -26,6 +26,23 @@ export function getMetadataBase(): URL {
   return new URL(`${SITE_BASE_URL.replace(/\/$/, '')}/`);
 }
 
+/** Keywords derived from canonical site business data — not hand-written per page. */
+export function buildSiteKeywords(site: GeneratedSite): string[] {
+  const industry = site.industry.trim();
+  const city = site.city.trim();
+  const state = site.state.trim();
+
+  return [
+    site.businessName.trim(),
+    industry,
+    city,
+    state,
+    `${industry} ${city}`,
+    `${industry} ${state}`,
+    `${site.businessName.trim()} ${city}`,
+  ].filter((value, index, list) => value.length > 0 && list.indexOf(value) === index);
+}
+
 type BuildPageMetadataInput = {
   site: GeneratedSite;
   title: string;
@@ -46,12 +63,14 @@ export function buildPageMetadata({
   openGraphType = 'website',
 }: BuildPageMetadataInput): Metadata {
   const canonical = buildCanonicalUrl(...pathParts);
+  const keywords = buildSiteKeywords(site);
 
   return {
     title,
     description,
     alternates: { canonical },
     robots: getSiteRobots(),
+    keywords,
     authors: [{ name: site.businessName }],
     creator: site.businessName,
     publisher: site.businessName,
@@ -65,6 +84,7 @@ export function buildPageMetadata({
     },
     other: {
       publisher: site.businessName,
+      keywords: keywords.join(', '),
     },
   };
 }

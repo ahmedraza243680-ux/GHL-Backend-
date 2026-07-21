@@ -1,11 +1,10 @@
 import { API_URL } from '@/src/config/config';
+import { ALL_SITES_CACHE_TAG, siteCacheTag } from '@/src/lib/siteCache';
 import type { GeneratedSite, LocationPage } from './types';
-
-const fetchOptions = { next: { revalidate: 3600 } };
 
 export async function getSiteBySlug(slug: string): Promise<GeneratedSite | null> {
   const res = await fetch(`${API_URL}/phase4/sites/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 3600 },
+    next: { revalidate: 3600, tags: [ALL_SITES_CACHE_TAG, siteCacheTag(slug)] },
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -13,7 +12,9 @@ export async function getSiteBySlug(slug: string): Promise<GeneratedSite | null>
 }
 
 export async function getAllSites(): Promise<GeneratedSite[]> {
-  const res = await fetch(`${API_URL}/phase4/sites`, fetchOptions);
+  const res = await fetch(`${API_URL}/phase4/sites`, {
+    next: { revalidate: 3600, tags: [ALL_SITES_CACHE_TAG] },
+  });
   if (!res.ok) return [];
   const data = await res.json();
   return data.data?.sites || [];
@@ -22,7 +23,7 @@ export async function getAllSites(): Promise<GeneratedSite[]> {
 export async function getLocationPages(slug: string): Promise<LocationPage[]> {
   const res = await fetch(
     `${API_URL}/phase4/sites/${encodeURIComponent(slug)}/location-pages`,
-    fetchOptions,
+    { next: { revalidate: 3600, tags: [siteCacheTag(slug), `${siteCacheTag(slug)}-locations`] } },
   );
   if (!res.ok) return [];
   const data = await res.json();
@@ -32,7 +33,12 @@ export async function getLocationPages(slug: string): Promise<LocationPage[]> {
 export async function getServicePageContent(slug: string, serviceSlug: string) {
   const res = await fetch(
     `${API_URL}/phase4/sites/${encodeURIComponent(slug)}/services/${encodeURIComponent(serviceSlug)}`,
-    { next: { revalidate: 86400 } },
+    {
+      next: {
+        revalidate: 86400,
+        tags: [siteCacheTag(slug), `${siteCacheTag(slug)}-service-${serviceSlug}`],
+      },
+    },
   );
   if (!res.ok) return null;
   const data = await res.json();

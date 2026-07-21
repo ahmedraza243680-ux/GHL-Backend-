@@ -6,11 +6,14 @@
  *   NEXT_PUBLIC_SITE_BASE_URL
  *   NEXT_PUBLIC_API_URL
  *   NEXT_PUBLIC_ALLOW_SEARCH_INDEXING=true|false
+ *   REVALIDATE_SECRET (optional override)
  */
 import {
   LOCAL_API_URL,
+  LOCAL_REVALIDATE_SECRET,
   LOCAL_SITE_BASE_URL,
   PRODUCTION_API_URL,
+  PRODUCTION_REVALIDATE_SECRET,
   PRODUCTION_SITE_BASE_URL,
 } from './defaults';
 
@@ -32,6 +35,7 @@ export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const envSiteBase = process.env.NEXT_PUBLIC_SITE_BASE_URL?.trim();
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 const envIndexing = process.env.NEXT_PUBLIC_ALLOW_SEARCH_INDEXING?.trim();
+const envRevalidateSecret = process.env.REVALIDATE_SECRET?.trim();
 
 export const SITE_BASE_URL = stripTrailingSlash(
   envSiteBase || (IS_PRODUCTION ? PRODUCTION_SITE_BASE_URL : LOCAL_SITE_BASE_URL),
@@ -41,6 +45,10 @@ export const API_URL = stripTrailingSlash(
   envApiUrl || (IS_PRODUCTION ? PRODUCTION_API_URL : LOCAL_API_URL),
 );
 
+export const REVALIDATE_SECRET =
+  envRevalidateSecret ||
+  (IS_PRODUCTION ? PRODUCTION_REVALIDATE_SECRET : LOCAL_REVALIDATE_SECRET);
+
 export const IS_SEARCH_INDEXABLE =
   envIndexing === 'true' ||
   (envIndexing !== 'false' && !isLocalHostUrl(SITE_BASE_URL));
@@ -49,6 +57,7 @@ export const IS_SEARCH_INDEXABLE =
 export const appConfig = {
   siteBaseUrl: SITE_BASE_URL,
   apiUrl: API_URL,
+  revalidateSecret: REVALIDATE_SECRET,
   isProduction: IS_PRODUCTION,
   isSearchIndexable: IS_SEARCH_INDEXABLE,
 } as const;

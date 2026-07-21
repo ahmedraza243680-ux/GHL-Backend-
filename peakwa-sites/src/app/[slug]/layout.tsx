@@ -4,8 +4,7 @@ import { Navbar } from '@/src/components/Navbar';
 import { Footer } from '@/src/components/Footer';
 import { BackToTop } from '@/src/components/BackToTop';
 import { SiteLoader } from '@/src/components/SiteLoader';
-import { API_URL } from '@/src/config/config';
-import { getLocationPages } from '@/src/lib/api';
+import { getLocationPages, getSiteBySlug } from '@/src/lib/api';
 import type { GeneratedSite } from '@/src/lib/types';
 import { parseJson, type ServicesContent } from '@/src/lib/content';
 import { resolveTheme } from '@/src/lib/theme';
@@ -18,12 +17,7 @@ type LayoutProps = {
 };
 
 async function fetchSiteBySlug(slug: string): Promise<GeneratedSite | null> {
-  const res = await fetch(`${API_URL}/phase4/sites/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 3600 },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.data?.site ?? null;
+  return getSiteBySlug(slug);
 }
 
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
