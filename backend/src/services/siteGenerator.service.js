@@ -3,9 +3,7 @@ import { env } from '../config/env.js';
 import prisma from '../database/client.js';
 import { AppError } from '../utils/AppError.js';
 import { getSchemaForIndustry } from './industrySchema.service.js';
-import { generateDefaultLocationPagesForSite } from './locationPage.service.js';
 import { buildSeoRequirements, ensureSeoMetadata } from './seoMetadata.service.js';
-import { revalidateSiteFrontendCache } from './siteRevalidation.service.js';
 
 const DEFAULT_THEME = {
   primaryColor: '#1F2937',
@@ -1081,31 +1079,6 @@ export async function generateSite(formData) {
         theme,
       }),
     );
-
-    try {
-      const locationPages = await generateDefaultLocationPagesForSite(site.id);
-      if (locationPages.length > 0) {
-        console.info(
-          JSON.stringify({
-            event: 'site_default_location_pages_created',
-            siteId: site.id,
-            slug: site.slug,
-            count: locationPages.length,
-          }),
-        );
-      }
-    } catch (locationError) {
-      console.warn(
-        JSON.stringify({
-          event: 'site_default_location_pages_failed',
-          siteId: site.id,
-          slug: site.slug,
-          error: locationError?.message ?? String(locationError),
-        }),
-      );
-    }
-
-    await revalidateSiteFrontendCache(site.slug);
 
     return site;
   } catch (e) {

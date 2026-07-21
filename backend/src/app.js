@@ -17,6 +17,10 @@ import phase4Routes from './routes/phase4.routes.js';
 export function createApp() {
   const app = express();
 
+  if (env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   const corsOptions = {
     origin: [
       'http://localhost:5173',
