@@ -55,7 +55,11 @@ function buildHomePageSchema() {
       { point: 'max 6 words', detail: '15-20 words' },
     ],
     cta: { heading: 'max 10 words', subtext: 'max 20 words', buttonText: 'max 4 words' },
-    seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
+    seo: {
+      title: '50-60 characters including business name, city, and industry (minimum 50)',
+      metaDescription:
+        '120-155 characters with city, state, industry keywords, and call to action (minimum 120)',
+    },
   };
 }
 
@@ -80,7 +84,11 @@ function buildAboutPageSchema() {
       { title: 'max 3 words', description: '15-20 words' },
       { title: 'max 3 words', description: '15-20 words' },
     ],
-    seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
+    seo: {
+      title: '50-60 characters including business name, city, and industry (minimum 50)',
+      metaDescription:
+        '120-155 characters with city, state, industry keywords, and call to action (minimum 120)',
+    },
   };
 }
 
@@ -91,7 +99,11 @@ function buildServicesPageSchema() {
       '120-160 words overview of all services offered, mentioning the city, state and industry keywords naturally for local SEO',
     services: buildServiceSlots(SERVICE_SLOTS, { withFullDescription: true }),
     cta: { heading: 'max 10 words', buttonText: 'max 4 words' },
-    seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
+    seo: {
+      title: '50-60 characters including business name, city, and industry (minimum 50)',
+      metaDescription:
+        '120-155 characters with city, state, industry keywords, and call to action (minimum 120)',
+    },
   };
 }
 
@@ -103,7 +115,11 @@ function buildContactPageSchema() {
     formHeading: 'max 6 words',
     addressSection: { heading: 'max 4 words' },
     hoursSection: { heading: 'max 4 words', description: '30-50 words about availability and service area' },
-    seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
+    seo: {
+      title: '50-60 characters including business name, city, and industry (minimum 50)',
+      metaDescription:
+        '120-155 characters with city, state, industry keywords, and call to action (minimum 120)',
+    },
   };
 }
 
@@ -118,8 +134,8 @@ function buildLocationPageSchema() {
       '80-120 words about serving that specific area and surrounding neighborhoods, naming nearby places where possible',
     cta: { heading: 'max 10 words', buttonText: 'max 4 words' },
     seo: {
-      title: 'max 60 characters include city name',
-      metaDescription: 'max 155 characters include city name',
+      title: '50-60 characters include city name (minimum 50)',
+      metaDescription: '120-155 characters include city name (minimum 120)',
     },
   };
 }
@@ -164,11 +180,20 @@ function buildBlogPageSchema() {
         answer: '40-70 word helpful, specific answer',
       },
     ],
+    seo: {
+      title: '50-60 characters with post title, business name, and city (minimum 50)',
+      metaDescription:
+        '120-155 characters summarizing the article with city and call to action (minimum 120)',
+    },
   };
 
   return {
     posts: [post, post, post],
-    seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
+    seo: {
+      title: '50-60 characters including business name, city, and industry (minimum 50)',
+      metaDescription:
+        '120-155 characters with city, state, industry keywords, and call to action (minimum 120)',
+    },
   };
 }
 

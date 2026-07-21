@@ -4,6 +4,7 @@ import prisma from '../database/client.js';
 import { AppError } from '../utils/AppError.js';
 import { getSchemaForIndustry } from './industrySchema.service.js';
 import { generateDefaultLocationPagesForSite } from './locationPage.service.js';
+import { buildSeoRequirements, ensureSeoMetadata } from './seoMetadata.service.js';
 
 const DEFAULT_THEME = {
   primaryColor: '#1F2937',
@@ -210,7 +211,7 @@ function validateFormData(formData) {
   const businessName = String(formData.businessName ?? '').trim();
   const industry = String(formData.industry ?? '').trim();
   const city = String(formData.city ?? '').trim();
-  const state = String(formData.state ?? 'NJ').trim() || 'NJ';
+  const state = String(formData.state ?? '').trim();
 
   if (!businessName) {
     throw new AppError('Field `businessName` is required.', 400, { code: 'INVALID_BODY' });
@@ -220,6 +221,9 @@ function validateFormData(formData) {
   }
   if (!city) {
     throw new AppError('Field `city` is required.', 400, { code: 'INVALID_BODY' });
+  }
+  if (!state) {
+    throw new AppError('Field `state` is required.', 400, { code: 'INVALID_BODY' });
   }
 
   return {
@@ -271,23 +275,33 @@ function buildPagePrompt(businessData, pageSchema, pageType, contextNote = '') {
   return `Generate ${pageType} page content for ${businessName}, a ${industry} business in ${city}, ${state}. ${details}${servicesInstruction}${blogInstruction}${seoRequirements} Return ONLY valid JSON matching this exact structure: ${pageSchema}. For every field with a word range, treat the lower number as a strict minimum you must reach; keep short fields (headings, buttons, titles) within their limits. Content must be specific to this business and city.`;
 }
 
-/**
- * SEO guidance appended to every page prompt. Applied uniformly across home,
- * about, services, contact, blog, and location pages.
- */
-function buildSeoRequirements({ businessName, industry, city, state }) {
-  return [
-    ' IMPORTANT SEO REQUIREMENTS:',
-    `Include city name ${city} and state ${state} naturally at least 3 times.`,
-    `Include industry keyword ${industry} naturally at least 4 times.`,
-    `Include business name ${businessName} naturally at least 2 times per section.`,
-    `Use long tail keywords related to ${industry} services in ${city}.`,
-    'Write minimum 150 words per paragraph not 60-80.',
-    'Add specific details about services offered.',
-    `Make content feel local and specific to ${city} ${state}.`,
-    'Word counts in the schema are strict minimums — reach the lower bound of every range.',
-    'Keep writing natural and human; never keyword-stuff or sacrifice readability.',
-  ].join(' ');
+async function finalizePageContent(pageType, content, businessData, systemPrompt) {
+  const withLength = await ensureMinimumContentLength(
+    pageType,
+    content,
+    businessData,
+    systemPrompt,
+  );
+  const withPageSeo = await ensureSeoMetadata(withLength, businessData, pageType, systemPrompt);
+
+  if (pageType !== 'blog' || !Array.isArray(withPageSeo.posts)) {
+    return withPageSeo;
+  }
+
+  const posts = await Promise.all(
+    withPageSeo.posts.map(async (post) => {
+      const fixed = await ensureSeoMetadata(
+        { seo: post?.seo ?? {} },
+        businessData,
+        'blogPost',
+        systemPrompt,
+        { subjectTitle: post?.title },
+      );
+      return { ...post, seo: fixed.seo };
+    }),
+  );
+
+  return { ...withPageSeo, posts };
 }
 
 async function callOpenAiForPage(systemPrompt, userPrompt, maxTokens = 2500) {
@@ -510,7 +524,8 @@ async function generateBlogPost(businessData, postOutline, systemPrompt, postInd
     '{ "question": "real customer question", "answer": "40-70 words" },',
     '{ "question": "different real customer question", "answer": "40-70 words" },',
     '{ "question": "third real customer question", "answer": "40-70 words" }',
-    '] }',
+    '],',
+    '"seo": { "title": "50-60 characters with post title, business name, and city", "metaDescription": "120-155 characters with post topic, city, and call to action" } }',
     'Introduction + all section paragraphs + conclusion combined MUST total at least 400 words.',
     'Write genuinely useful, distinct content — no filler or repetition.',
   ]
@@ -918,16 +933,17 @@ export async function generatePageContent(
       systemPrompt,
       contextNote,
     );
-    return ensureMinimumContentLength('services', content, businessData, systemPrompt);
+    return finalizePageContent('services', content, businessData, systemPrompt);
   }
 
   if (pageType === 'blog') {
-    return generateBlogPageContent(
+    const blogContent = await generateBlogPageContent(
       businessData,
       pageSchema,
       systemPrompt,
       contextNote,
     );
+    return finalizePageContent('blog', blogContent, businessData, systemPrompt);
   }
 
   const userPrompt = buildPagePrompt(businessData, pageSchema, pageType, contextNote);
@@ -939,7 +955,7 @@ export async function generatePageContent(
     try {
       const raw = await callOpenAiForPage(systemPrompt, userPrompt, maxTokens);
       const content = normalizePageStructure(pageType, parseJsonContent(raw));
-      return ensureMinimumContentLength(pageType, content, businessData, systemPrompt);
+      return finalizePageContent(pageType, content, businessData, systemPrompt);
     } catch (e) {
       lastError = e;
       console.warn(

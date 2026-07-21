@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { getSchemaForIndustry } from './industrySchema.service.js';
 import { fetchPexelsImageByQuery } from './pexels.service.js';
+import { buildSeoRequirements, ensureSeoMetadata } from './seoMetadata.service.js';
 
 const OPENAI_CONTENT_MODEL = 'gpt-4o';
 
@@ -41,8 +42,9 @@ const LOCATION_PAGE_SCHEMA = {
     },
   ],
   seo: {
-    title: 'city + industry + business, max 60 characters',
-    metaDescription: 'city + state + service keywords, max 155 characters',
+    title: '50-60 characters including city, industry, and business name (minimum 50)',
+    metaDescription:
+      '120-155 characters including city, state, industry keywords, and call to action (minimum 120)',
   },
 };
 
@@ -98,16 +100,9 @@ function validateLocations(locations) {
 
 function buildLocationSeoRequirements({ businessName, industry, city, state }) {
   return [
-    ' IMPORTANT SEO REQUIREMENTS:',
-    `Include city name ${city} and state ${state} naturally at least 3 times.`,
-    `Include industry keyword ${industry} naturally at least 4 times.`,
-    `Include business name ${businessName} naturally at least 2 times per section.`,
+    buildSeoRequirements({ businessName, industry, city, state }),
     `Use long tail keywords related to ${industry} services in ${city}.`,
-    'Write minimum 150 words per paragraph not 60-80.',
-    'Add specific details about services offered.',
-    `Make content feel local and specific to ${city} ${state}.`,
     'Mention real local landmarks, neighborhoods, and community details for this city.',
-    'Word counts in the schema are strict minimums — reach the lower bound of every range.',
   ].join(' ');
 }
 
@@ -292,6 +287,10 @@ async function generateLocationPageContent(businessData, location, site, systemP
   }
 
   content = await ensureLocationPageLength(content, businessData, location);
+
+  content = await ensureSeoMetadata(content, businessData, 'location', systemPrompt, {
+    locationCity: location.city,
+  });
 
   const remaining = validateLocationContent(content);
   if (remaining.length > 0) {

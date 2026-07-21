@@ -4,6 +4,14 @@ import nodemailer from 'nodemailer';
 import OpenAI from 'openai';
 import { env } from '../config/env.js';
 import prisma from '../database/client.js';
+import {
+  buildSeoRequirements,
+  ensureSeoMetadata,
+  SEO_META_MAX,
+  SEO_META_MIN,
+  SEO_TITLE_MAX,
+  SEO_TITLE_MIN,
+} from '../services/seoMetadata.service.js';
 import { generateLocationPages } from '../services/locationPage.service.js';
 import {
   generatePageContent,
@@ -809,6 +817,8 @@ function findServiceBySlug(site, serviceSlug) {
 }
 
 function buildServicePagePrompt(serviceTitle, businessName, industry, city, state) {
+  const seoRequirements = buildSeoRequirements({ businessName, industry, city, state });
+
   return `Write detailed content for a dedicated service page for ${serviceTitle} offered by ${businessName}, a ${industry} business in ${city}, ${state}.
 Return ONLY valid JSON:
 {
@@ -837,10 +847,10 @@ Return ONLY valid JSON:
 ],
 "whyUs": "80-100 words paragraph about why choose this business for this specific service",
 "seo": {
-"title": "max 60 characters with service name and city",
-"metaDescription": "max 155 characters with service name city and business name"
+"title": "${SEO_TITLE_MIN}-${SEO_TITLE_MAX} characters with service name, business name, and city",
+"metaDescription": "${SEO_META_MIN}-${SEO_META_MAX} characters with service name, city, business name, and call to action"
 }
-}`;
+}${seoRequirements}`;
 }
 
 const SERVICE_PAGE_OPENAI_TIMEOUT_MS = 20_000;
@@ -954,13 +964,26 @@ async function generateServicePageContent(businessName, industry, city, state, s
 const pendingServicePageGenerations = new Map();
 
 async function generateAndUpsertServicePage(site, serviceSlug, service) {
-  const content = await generateServicePageContent(
+  const schema = await getSchemaForIndustry(site.industry);
+  const businessData = {
+    businessName: site.businessName,
+    industry: site.industry,
+    city: site.city,
+    state: site.state,
+    phone: site.phone,
+  };
+
+  let content = await generateServicePageContent(
     site.businessName,
     site.industry,
     site.city,
     site.state,
     service.title,
   );
+
+  content = await ensureSeoMetadata(content, businessData, 'service', schema.systemPrompt, {
+    subjectTitle: service.title,
+  });
 
   const servicePage = await prisma.servicePage.upsert({
     where: { siteId_serviceSlug: { siteId: site.id, serviceSlug } },
