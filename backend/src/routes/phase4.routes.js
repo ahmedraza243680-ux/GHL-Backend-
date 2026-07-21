@@ -11,6 +11,7 @@ import {
   generateSiteTheme,
   getGeneratedSiteBySlug,
   listGeneratedSites,
+  syncHomeServicesWithServices,
 } from '../services/siteGenerator.service.js';
 import {
   createIndustrySchema,
@@ -415,8 +416,10 @@ async function regenerateSiteContent(site) {
       generateSiteTheme(businessData.businessName, businessData.industry, businessData.city),
     ]);
 
+  const syncedHome = syncHomeServicesWithServices(homeResult, servicesResult);
+
   return {
-    homeContent: JSON.stringify(homeResult),
+    homeContent: JSON.stringify(syncedHome),
     aboutContent: JSON.stringify(aboutResult),
     servicesContent: JSON.stringify(servicesResult),
     contactContent: JSON.stringify(contactResult),
@@ -902,7 +905,7 @@ async function callOpenAiForServicePage(businessName, industry, city, state, ser
 
   const client = new OpenAI({ apiKey, timeout: SERVICE_PAGE_OPENAI_TIMEOUT_MS });
   const completion = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4o',
     temperature: 0.7,
     max_tokens: 2500,
     response_format: { type: 'json_object' },

@@ -39,6 +39,10 @@ function colorWithOpacity(hex: string, opacity: number) {
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
+function slugifyService(title: string): string {
+  return title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
 function hashString(value: string): number {
   return value.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 }
@@ -393,48 +397,69 @@ export default async function HomePage({ params }: PageProps) {
           <h2 className="text-3xl font-bold text-gray-900">Our Services</h2>
         </div>
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {homeServices.map((service, i) => (
-            <article
-              key={`${service.title}-${i}`}
-              className="overflow-hidden rounded-2xl bg-white shadow-lg transition duration-300 hover:-translate-y-1 hover:shadow-xl"
-              style={{ borderTop: `4px solid ${theme.accentColor}` }}
-            >
-              {images.services[i] ? (
-                <div className="relative h-[180px] w-full overflow-hidden rounded-t-xl">
-                  <SiteImage
-                    src={images.services[i]!}
-                    alt={`${service.title} service`}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    fallback={
-                      <div
-                        className="flex h-full items-center justify-center"
-                        style={{ backgroundColor: colorWithOpacity(theme.primaryColor, 0.2) }}
-                      >
-                        <span style={{ color: theme.accentColor }}>
-                          {getIcon(service.icon || 'wrench', 'w-8 h-8')}
-                        </span>
-                      </div>
-                    }
-                  />
-                </div>
-              ) : (
-                <div
-                  className="flex h-20 items-center justify-center"
-                  style={{ backgroundColor: colorWithOpacity(theme.primaryColor, 0.2) }}
-                >
-                  <span style={{ color: theme.accentColor }}>
-                    {getIcon(service.icon || 'wrench', 'w-8 h-8')}
+          {homeServices.map((service, i) => {
+            const serviceSlug = slugifyService(service.title || `service-${i}`);
+            return (
+              <Link
+                key={`${service.title}-${i}`}
+                href={`/${slug}/services/${serviceSlug}`}
+                className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-lg transition duration-300 hover:-translate-y-1 hover:shadow-xl"
+                style={{ borderTop: `4px solid ${theme.accentColor}` }}
+              >
+                {images.services[i] ? (
+                  <div className="relative h-[180px] w-full overflow-hidden">
+                    <SiteImage
+                      src={images.services[i]!}
+                      alt={`${service.title} service`}
+                      fill
+                      className="object-cover transition duration-300 group-hover:scale-105"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      fallback={
+                        <div
+                          className="flex h-full items-center justify-center"
+                          style={{ backgroundColor: colorWithOpacity(theme.primaryColor, 0.2) }}
+                        >
+                          <span style={{ color: theme.accentColor }}>
+                            {getIcon(service.icon || 'wrench', 'w-8 h-8')}
+                          </span>
+                        </div>
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="flex h-20 items-center justify-center"
+                    style={{ backgroundColor: colorWithOpacity(theme.primaryColor, 0.2) }}
+                  >
+                    <span style={{ color: theme.accentColor }}>
+                      {getIcon(service.icon || 'wrench', 'w-8 h-8')}
+                    </span>
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col p-8">
+                  <h3 className="text-lg font-semibold text-gray-900 group-hover:underline">
+                    {service.title}
+                  </h3>
+                  <p className="mt-3 flex-1 text-gray-600">{service.description}</p>
+                  <span
+                    className="mt-5 inline-flex items-center gap-2 text-sm font-semibold"
+                    style={{ color: theme.accentColor }}
+                  >
+                    Learn More <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                   </span>
                 </div>
-              )}
-              <div className="p-8">
-                <h3 className="text-lg font-semibold text-gray-900">{service.title}</h3>
-                <p className="mt-3 text-gray-600">{service.description}</p>
-              </div>
-            </article>
-          ))}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="mt-12 text-center">
+          <Link
+            href={`/${slug}/services`}
+            className="inline-flex items-center justify-center gap-2 rounded-full border-2 px-8 py-3 text-sm font-semibold transition hover:opacity-80"
+            style={{ borderColor: theme.accentColor, color: theme.accentColor }}
+          >
+            View All Services <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </SectionWrapper>
 

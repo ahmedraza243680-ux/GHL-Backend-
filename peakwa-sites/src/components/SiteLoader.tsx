@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { darkenHex, getTextColor } from '@/src/lib/theme';
+import { getTextColor, hexToRgb } from '@/src/lib/theme';
 
 type SiteLoaderProps = {
   businessName: string;
@@ -83,37 +83,62 @@ export function SiteLoader({
 
   if (phase === 'done') return null;
 
-  const background = `linear-gradient(135deg, ${primaryColor}, ${darkenHex(primaryColor, 0.28)})`;
+  const background = primaryColor;
   const initials = getInitials(businessName);
+  const { r, g, b } = hexToRgb(accentColor);
+  const accentSoft = `rgba(${r}, ${g}, ${b}, 0.25)`;
 
   return (
     <div
       aria-hidden="true"
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center transition-opacity ease-out ${
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden transition-opacity ease-out ${
         phase === 'hiding' ? 'opacity-0' : 'opacity-100'
       }`}
       style={{ background, transitionDuration: '500ms' }}
     >
-      <div className="relative flex h-24 w-24 items-center justify-center">
-        <span
-          className="absolute inset-0 animate-spin rounded-full border-4 border-white/15 motion-reduce:animate-none"
-          style={{
-            borderTopColor: accentColor,
-            borderRightColor: accentColor,
-            animationDuration: '900ms',
-          }}
-        />
-        <span
-          className="flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black shadow-lg"
-          style={{ backgroundColor: accentColor, color: getTextColor(accentColor) }}
+      <div className="relative flex flex-col items-center">
+        <div className="relative flex h-28 w-28 items-center justify-center">
+          <span
+            className="absolute inset-0 animate-spin rounded-full border-[3px] border-white/10 motion-reduce:animate-none"
+            style={{
+              borderTopColor: accentColor,
+              borderRightColor: accentSoft,
+              animationDuration: '850ms',
+            }}
+          />
+          <span
+            className="animate-loader-pop relative flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black tracking-tight"
+            style={{
+              backgroundColor: accentColor,
+              color: getTextColor(accentColor),
+            }}
+          >
+            {initials}
+          </span>
+        </div>
+
+        <p
+          className="animate-fade-up mt-8 text-center text-2xl font-bold tracking-tight text-white"
+          style={{ animationDelay: '120ms' }}
         >
-          {initials}
-        </span>
+          {businessName}
+        </p>
+        {tagline ? (
+          <p
+            className="animate-fade-up mt-1.5 text-center text-sm font-medium text-white/70"
+            style={{ animationDelay: '220ms' }}
+          >
+            {tagline}
+          </p>
+        ) : null}
+
+        <div className="mt-8 h-1 w-44 overflow-hidden rounded-full bg-white/15">
+          <span
+            className="animate-loader-bar block h-full w-1/3 rounded-full"
+            style={{ backgroundColor: accentColor }}
+          />
+        </div>
       </div>
-      <p className="mt-6 animate-pulse text-xl font-bold tracking-tight text-white motion-reduce:animate-none">
-        {businessName}
-      </p>
-      {tagline ? <p className="mt-1 text-sm text-white/70">{tagline}</p> : null}
     </div>
   );
 }

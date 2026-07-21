@@ -6,18 +6,34 @@ dotenv.config();
 const prisma = new PrismaClient();
 
 const DEFAULT_SYSTEM_PROMPT =
-  'You are a professional website content writer for local businesses. Write in natural human tone. No corporate buzzwords like exceptional, leverage, seamless, innovative, utilize. Content must be specific to the business name, city and services. Generate comprehensive service lists of 6 to 8 services that are highly relevant and specific to this industry. Sound like a real local business owner wrote it.';
+  'You are a professional SEO website content writer for local businesses. Write in a natural human tone. No corporate buzzwords like exceptional, leverage, seamless, innovative, utilize. Content must be specific to the business name, city and services. Produce rich, in-depth, keyword-optimized copy that naturally weaves in the city, state and industry keywords for strong local SEO — never thin, generic, or filler text. Generate a comprehensive list of 6 to 8 real, concrete services that a customer would actually search for from this specific type of business. Never use generic placeholder names like "Service One", "Core Service", "Specialty Service" or "Support Service" — always use the real, industry-specific service name. Sound like a real local business owner wrote it.';
 
-function buildHomePageSchema(
-  serviceTitles = [
-    'Service One',
-    'Service Two',
-    'Service Three',
-    'Service Four',
-    'Service Five',
-    'Service Six',
-  ],
-) {
+// Number of service slots we ask the model to fill. Providing explicit slots
+// (instead of literal placeholder titles) pushes the model to return a full,
+// business-specific list without echoing placeholder text like "Core Service".
+const SERVICE_SLOTS = 8;
+
+function buildServiceSlots(count, { withFullDescription }) {
+  return Array.from({ length: count }, () =>
+    withFullDescription
+      ? {
+          title:
+            'real specific service this exact business offers, 2 to 5 words, never a generic label',
+          shortDescription: '30-45 words teaser specific to this service and city',
+          fullDescription:
+            '200-250 words of in-depth, keyword-optimized detail about this service: what it includes, the process, benefits, and why local customers in this city should choose this business',
+          icon: 'relevant lucide icon name',
+        }
+      : {
+          title:
+            'real specific service this exact business offers, 2 to 4 words, never a generic label',
+          description: '25-35 words specific to this service and city',
+          icon: 'relevant lucide icon name',
+        },
+  );
+}
+
+function buildHomePageSchema() {
   return {
     hero: {
       heading: 'max 8 words powerful headline with business name',
@@ -26,14 +42,12 @@ function buildHomePageSchema(
     },
     about: {
       heading: 'max 6 words',
-      paragraph1: '60-80 words introduce the business',
-      paragraph2: '60-80 words what makes them different',
+      paragraph1:
+        '150-200 words introducing the business, its local roots in this city, experience, and the industry services it provides',
+      paragraph2:
+        '150-200 words on what makes this business different, its commitment to local customers, and why residents in this city and state trust it',
     },
-    services: serviceTitles.slice(0, 8).map((title) => ({
-      title: `max 4 words — use "${title}" as theme`,
-      description: '25-35 words',
-      icon: 'lucide icon name',
-    })),
+    services: buildServiceSlots(6, { withFullDescription: false }),
     whyChooseUs: [
       { point: 'max 6 words', detail: '15-20 words' },
       { point: 'max 6 words', detail: '15-20 words' },
@@ -50,10 +64,16 @@ function buildAboutPageSchema() {
     hero: { heading: 'max 8 words', subheading: 'max 20 words' },
     story: {
       heading: 'max 6 words',
-      paragraph1: '80-100 words company history',
-      paragraph2: '80-100 words mission and values',
+      paragraph1:
+        '200-250 words on the company history and how it grew serving this city, with local and industry keywords woven in naturally',
+      paragraph2:
+        '200-250 words on the mission, values, and long-term commitment to customers in this city and state',
     },
-    team: { heading: 'max 6 words', description: '40-60 words about the team' },
+    team: {
+      heading: 'max 6 words',
+      description:
+        '100-140 words about the team, their local expertise, qualifications, and dedication to serving this community',
+    },
     mission: { heading: 'max 6 words', statement: '30-40 words' },
     values: [
       { title: 'max 3 words', description: '15-20 words' },
@@ -64,27 +84,12 @@ function buildAboutPageSchema() {
   };
 }
 
-function buildServicesPageSchema(
-  serviceTitles = [
-    'Service One',
-    'Service Two',
-    'Service Three',
-    'Service Four',
-    'Service Five',
-    'Service Six',
-    'Service Seven',
-    'Service Eight',
-  ],
-) {
+function buildServicesPageSchema() {
   return {
     hero: { heading: 'max 8 words', subheading: 'max 20 words' },
-    intro: '60-80 words overview of all services offered',
-    services: serviceTitles.slice(0, 8).map((title) => ({
-      title: `max 5 words — use "${title}" as theme`,
-      shortDescription: '20-30 words',
-      fullDescription: '60-80 words',
-      icon: 'lucide icon name',
-    })),
+    intro:
+      '120-160 words overview of all services offered, mentioning the city, state and industry keywords naturally for local SEO',
+    services: buildServiceSlots(SERVICE_SLOTS, { withFullDescription: true }),
     cta: { heading: 'max 10 words', buttonText: 'max 4 words' },
     seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
   };
@@ -93,10 +98,11 @@ function buildServicesPageSchema(
 function buildContactPageSchema() {
   return {
     hero: { heading: 'max 8 words', subheading: 'max 20 words' },
-    intro: '40-60 words inviting customers to get in touch',
+    intro:
+      '90-130 words inviting customers in this city to get in touch, mentioning the industry, service area and how the business helps local customers',
     formHeading: 'max 6 words',
     addressSection: { heading: 'max 4 words' },
-    hoursSection: { heading: 'max 4 words', description: '20-30 words about availability' },
+    hoursSection: { heading: 'max 4 words', description: '30-50 words about availability and service area' },
     seo: { title: 'max 60 characters', metaDescription: 'max 155 characters' },
   };
 }
@@ -104,9 +110,12 @@ function buildContactPageSchema() {
 function buildLocationPageSchema() {
   return {
     hero: { heading: 'max 10 words mentioning city name', subheading: 'max 20 words' },
-    localIntro: '60-80 words specific to that city mentioning local landmarks or community',
-    whyLocal: '40-60 words why local customers should choose this business',
-    serviceArea: '30-40 words about serving that specific area',
+    localIntro:
+      '150-200 words specific to that city, mentioning local landmarks, neighborhoods or community, plus the industry services offered there',
+    whyLocal:
+      '100-150 words on why local customers in that city should choose this business, with local and industry keywords woven in',
+    serviceArea:
+      '80-120 words about serving that specific area and surrounding neighborhoods, naming nearby places where possible',
     cta: { heading: 'max 10 words', buttonText: 'max 4 words' },
     seo: {
       title: 'max 60 characters include city name',
@@ -116,38 +125,31 @@ function buildLocationPageSchema() {
 }
 
 function buildBlogPageSchema() {
-  // A single detailed, well-structured article template. Reused for each of the
-  // three posts so every blog entry is long-form (intro + headed sections +
-  // conclusion + real FAQs) instead of a thin, structureless blob.
+  // Each post targets 400-500 words across introduction, section paragraphs, and
+  // conclusion. FAQs sit outside that count so the main article stays focused.
   const post = {
     title: 'specific, compelling blog post title, max 12 words',
     excerpt: '40-60 word summary that makes the reader want to open the article',
     category: 'single word topic category',
     readTime: 'X min read',
     introduction:
-      '70-100 word opening paragraph that hooks the reader and introduces the topic in a relatable, specific way',
+      '80-100 word opening paragraph that hooks the reader, introduces the topic in a relatable, specific way, and naturally references the city and industry',
     sections: [
       {
         heading: 'clear, specific H2 subheading, max 8 words',
         paragraphs: [
-          '110-150 words of genuinely useful, specific detail',
-          '110-150 words continuing the point with concrete examples or practical advice',
+          '150-175 words of genuinely useful, specific detail with local and industry keywords woven in naturally',
         ],
       },
       {
         heading: 'clear, specific H2 subheading, max 8 words',
         paragraphs: [
-          '110-150 words of genuinely useful, specific detail',
-          '110-150 words continuing the point with concrete examples or practical advice',
+          '150-175 words continuing the point with concrete examples, practical advice, and local relevance',
         ],
-      },
-      {
-        heading: 'clear, specific H2 subheading, max 8 words',
-        paragraphs: ['110-150 words of genuinely useful, specific detail'],
       },
     ],
     conclusion:
-      '60-90 word closing paragraph that summarizes the key takeaway and ends with a natural, non-pushy call to action',
+      '80-100 word closing paragraph that summarizes the key takeaway, reinforces local expertise, and ends with a natural, non-pushy call to action',
     faqs: [
       {
         question: 'a real question customers ask about this topic',
@@ -170,22 +172,15 @@ function buildBlogPageSchema() {
   };
 }
 
-function buildSchemaRecord({
-  industry,
-  displayName,
-  systemPrompt,
-  isDefault = false,
-  homeServices,
-  servicesPageServices,
-}) {
+function buildSchemaRecord({ industry, displayName, systemPrompt, isDefault = false }) {
   return {
     industry,
     displayName,
     systemPrompt,
     isDefault,
-    homePageSchema: JSON.stringify(buildHomePageSchema(homeServices)),
+    homePageSchema: JSON.stringify(buildHomePageSchema()),
     aboutPageSchema: JSON.stringify(buildAboutPageSchema()),
-    servicesPageSchema: JSON.stringify(buildServicesPageSchema(servicesPageServices)),
+    servicesPageSchema: JSON.stringify(buildServicesPageSchema()),
     contactPageSchema: JSON.stringify(buildContactPageSchema()),
     locationPageSchema: JSON.stringify(buildLocationPageSchema()),
     blogPageSchema: JSON.stringify(buildBlogPageSchema()),
@@ -198,104 +193,24 @@ const SEED_SCHEMAS = [
     displayName: 'General Business',
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     isDefault: true,
-    homeServices: [
-      'Primary Service',
-      'Secondary Service',
-      'Additional Service',
-      'Consultation',
-      'Maintenance',
-      'Support Service',
-      'Specialty Work',
-      'Emergency Service',
-    ],
-    servicesPageServices: [
-      'Core Service',
-      'Specialty Service',
-      'Maintenance Service',
-      'Consultation',
-      'Support Service',
-      'Installation',
-      'Repair Service',
-      'Emergency Response',
-    ],
   }),
   buildSchemaRecord({
     industry: 'automotive',
     displayName: 'Automotive',
     systemPrompt:
-      'You are writing for a car dealership. Focus on vehicle selection, financing options, test drives, service department, certified vehicles, trade-ins. Generate a comprehensive list of 6 to 8 services specific to automotive dealerships and auto service. Mention specific city. Friendly approachable tone.',
-    homeServices: [
-      'Vehicle Sales',
-      'Auto Financing',
-      'Service and Repair',
-      'Trade-In Appraisal',
-      'Vehicle Inspection',
-      'Test Drives',
-      'Parts Department',
-      'Certified Pre-Owned',
-    ],
-    servicesPageServices: [
-      'Vehicle Sales',
-      'Auto Financing',
-      'Service and Repair',
-      'Trade-In Appraisal',
-      'Vehicle Inspection',
-      'Test Drives',
-      'Parts Department',
-      'Certified Pre-Owned',
-    ],
+      'You are writing for a car dealership. Focus on vehicle selection, financing options, test drives, service department, certified vehicles, trade-ins. Generate a comprehensive list of 6 to 8 real, specific services offered by automotive dealerships and auto service centers (for example vehicle sales, auto financing, service and repair, trade-in appraisal, parts department). Never use generic placeholder names. Mention specific city. Friendly approachable tone.',
   }),
   buildSchemaRecord({
     industry: 'hvac',
     displayName: 'HVAC',
     systemPrompt:
-      'You are writing for an HVAC company. Focus on heating, cooling, emergency service, seasonal maintenance, energy efficiency, fast response time, licensed technicians. Generate a comprehensive list of 6 to 8 services specific to HVAC and climate control. Mention specific city and nearby areas.',
-    homeServices: [
-      'AC Repair',
-      'Heating Service',
-      'Emergency Calls',
-      'Preventive Maintenance',
-      'System Installation',
-      'Duct Cleaning',
-      'Indoor Air Quality',
-      'Thermostat Upgrades',
-    ],
-    servicesPageServices: [
-      'AC Repair',
-      'Heating Service',
-      'Emergency Calls',
-      'Preventive Maintenance',
-      'System Installation',
-      'Duct Cleaning',
-      'Indoor Air Quality',
-      'Thermostat Upgrades',
-    ],
+      'You are writing for an HVAC company. Focus on heating, cooling, emergency service, seasonal maintenance, energy efficiency, fast response time, licensed technicians. Generate a comprehensive list of 6 to 8 real, specific HVAC services (for example AC repair, heating installation, duct cleaning, preventive maintenance, indoor air quality). Never use generic placeholder names. Mention specific city and nearby areas.',
   }),
   buildSchemaRecord({
     industry: 'business',
     displayName: 'Business Services',
     systemPrompt:
-      'You are writing for a professional business services company. Focus on consulting, client results, expertise, reliability, professional advice, business growth. Generate a comprehensive list of 6 to 8 services specific to professional business consulting and support.',
-    homeServices: [
-      'Business Consulting',
-      'Strategic Planning',
-      'Growth Strategy',
-      'Financial Advisory',
-      'Operations Support',
-      'Market Research',
-      'Process Improvement',
-      'Leadership Coaching',
-    ],
-    servicesPageServices: [
-      'Business Consulting',
-      'Strategic Planning',
-      'Financial Advisory',
-      'Operations Support',
-      'Growth Strategy',
-      'Market Research',
-      'Process Improvement',
-      'Leadership Coaching',
-    ],
+      'You are writing for a professional business services company. Focus on consulting, client results, expertise, reliability, professional advice, business growth. Generate a comprehensive list of 6 to 8 real, specific professional services (for example business consulting, strategic planning, financial advisory, market research). Never use generic placeholder names.',
   }),
 ];
 

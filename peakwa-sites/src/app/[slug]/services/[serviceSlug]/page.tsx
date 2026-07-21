@@ -122,6 +122,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         slug={slug}
         serviceTitle={serviceTitle}
         serviceImage={serviceImage}
+        overviewImage={images.about ?? images.services[serviceIndex + 1] ?? images.hero}
         theme={theme}
         otherServices={otherServices}
         content={content}
@@ -323,6 +324,7 @@ type ServiceDetailFromContentProps = {
   slug: string;
   serviceTitle: string;
   serviceImage: string | null;
+  overviewImage: string | null;
   theme: SiteTheme;
   otherServices: Array<{ title?: string; shortDescription?: string; icon?: string }>;
   content: ServicePageContent;
@@ -333,6 +335,7 @@ function ServiceDetailFromContent({
   slug,
   serviceTitle,
   serviceImage,
+  overviewImage,
   theme,
   otherServices,
   content,
@@ -413,9 +416,32 @@ function ServiceDetailFromContent({
 
       {content.overview ? (
         <SectionWrapper background="#fff" className="py-20">
-          <div className="mx-auto max-w-3xl">
-            <h2 className="text-2xl font-bold text-gray-900">About {serviceTitle}</h2>
-            <p className="mt-4 text-lg leading-relaxed text-gray-600">{content.overview}</p>
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">About {serviceTitle}</h2>
+              <div
+                className="my-6 h-1 w-16 rounded-full"
+                style={{ backgroundColor: theme.accentColor }}
+              />
+              <p className="text-lg leading-relaxed text-gray-600">{content.overview}</p>
+            </div>
+            {overviewImage ? (
+              <div className="relative h-[320px] w-full overflow-hidden rounded-3xl shadow-xl lg:h-[440px]">
+                <SiteImage
+                  src={overviewImage}
+                  alt={`${serviceTitle} at ${site.businessName}`}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  fallback={
+                    <div
+                      className="h-full w-full"
+                      style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                    />
+                  }
+                />
+              </div>
+            ) : null}
           </div>
         </SectionWrapper>
       ) : null}

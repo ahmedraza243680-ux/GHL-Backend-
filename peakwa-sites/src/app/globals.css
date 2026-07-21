@@ -49,6 +49,61 @@ body {
   animation: fade-up 0.8s ease-out both;
 }
 
+@keyframes loader-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-loader-pop {
+  animation: loader-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes loader-bar {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+.animate-loader-bar {
+  animation: loader-bar 1.25s ease-in-out infinite;
+}
+
+@keyframes loader-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.18);
+  }
+}
+
+.animate-loader-glow {
+  animation: loader-glow 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-loader-bar,
+  .animate-loader-glow,
+  .animate-loader-pop {
+    animation: none;
+  }
+}
+
 .hero-pattern {
   background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 0);
   background-size: 28px 28px;
