@@ -13,6 +13,7 @@ import {
   isValidSeoTitle,
   validateSeoBlock,
 } from '../services/seoMetadata.service.js';
+import { revalidateSiteFrontendCache } from '../services/siteRevalidation.service.js';
 
 const PAGE_FIELDS = [
   { key: 'homeContent', kind: 'home' },
@@ -174,7 +175,10 @@ async function backfillSite(site) {
 
   if (Object.keys(updates).length === 0 && locationUpdates === 0 && serviceUpdates === 0) {
     console.info(JSON.stringify({ event: 'backfill_seo_skipped', slug: site.slug }));
+    return;
   }
+
+  await revalidateSiteFrontendCache(site.slug);
 }
 
 async function main() {

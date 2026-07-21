@@ -12,6 +12,7 @@ import {
   SEO_TITLE_MAX,
   SEO_TITLE_MIN,
 } from '../services/seoMetadata.service.js';
+import { revalidateSiteFrontendCache } from '../services/siteRevalidation.service.js';
 import { generateLocationPages } from '../services/locationPage.service.js';
 import {
   generatePageContent,
@@ -1418,6 +1419,8 @@ router.post(
       await sendCustomerWelcomeEmail(site);
     }
 
+    await revalidateSiteFrontendCache(site.slug);
+
     return res.status(201).json({
       success: true,
       data: { slug: site.slug, site },
@@ -1456,6 +1459,8 @@ router.patch(
       include: { template: true },
     });
 
+    await revalidateSiteFrontendCache(site.slug);
+
     return res.json({
       success: true,
       data: { site: serializeSiteWithTheme(site) },
@@ -1476,6 +1481,8 @@ router.post(
       data: regenerated,
       include: { template: true },
     });
+
+    await revalidateSiteFrontendCache(site.slug);
 
     return res.json({
       success: true,

@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError.js';
 import { getSchemaForIndustry } from './industrySchema.service.js';
 import { generateDefaultLocationPagesForSite } from './locationPage.service.js';
 import { buildSeoRequirements, ensureSeoMetadata } from './seoMetadata.service.js';
+import { revalidateSiteFrontendCache } from './siteRevalidation.service.js';
 
 const DEFAULT_THEME = {
   primaryColor: '#1F2937',
@@ -1103,6 +1104,8 @@ export async function generateSite(formData) {
         }),
       );
     }
+
+    await revalidateSiteFrontendCache(site.slug);
 
     return site;
   } catch (e) {
