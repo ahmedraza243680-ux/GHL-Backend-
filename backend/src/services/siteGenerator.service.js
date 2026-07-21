@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import prisma from '../database/client.js';
 import { AppError } from '../utils/AppError.js';
 import { getSchemaForIndustry } from './industrySchema.service.js';
+import { generateDefaultLocationPagesForSite } from './locationPage.service.js';
 
 const DEFAULT_THEME = {
   primaryColor: '#1F2937',
@@ -316,6 +317,381 @@ async function callOpenAiForPage(systemPrompt, userPrompt, maxTokens = 2500) {
 }
 
 /**
+ * Generates a single long-form text field in its own completion so the model
+ * can reliably reach SEO word targets without compressing a full page JSON blob.
+ */
+async function expandTextField(
+  businessData,
+  systemPrompt,
+  { label, currentText, minWords, maxWords, contextNote = '' },
+) {
+  const { businessName, industry, city, state } = businessData;
+
+  const userPrompt = [
+    `Rewrite and expand this ${label} for ${businessName}, a ${industry} business in ${city}, ${state}.`,
+    contextNote,
+    buildSeoRequirements(businessData),
+    `Current draft (${countWords(currentText)} words): "${currentText}"`,
+    `Return ONLY valid JSON: { "text": "${minWords}-${maxWords} words of expanded, keyword-optimized, locally specific content" }`,
+    `The text MUST be at least ${minWords} words.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  let lastError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const raw = await callOpenAiForPage(systemPrompt, userPrompt, 900);
+      const parsed = parseJsonContent(raw);
+      const text = parsed?.text;
+      if (countWords(text) >= minWords) {
+        return text;
+      }
+      if (attempt < 2) continue;
+      return text || currentText;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  console.warn(
+    JSON.stringify({
+      event: 'expand_text_field_failed',
+      label,
+      error: lastError?.message ?? String(lastError),
+      businessName,
+    }),
+  );
+  return currentText;
+}
+
+const TEXT_FIELD_EXPANSION_SPECS = {
+  'about.paragraph1': {
+    label: 'home page about section first paragraph',
+    maxWords: 200,
+  },
+  'about.paragraph2': {
+    label: 'home page about section second paragraph',
+    maxWords: 200,
+  },
+  'story.paragraph1': {
+    label: 'about page company history paragraph',
+    maxWords: 250,
+  },
+  'story.paragraph2': {
+    label: 'about page mission and values paragraph',
+    maxWords: 250,
+  },
+  'team.description': {
+    label: 'about page team description',
+    maxWords: 140,
+  },
+  intro: {
+    label: 'page introduction',
+    maxWords: 160,
+  },
+  localIntro: {
+    label: 'location page local introduction',
+    maxWords: 200,
+  },
+  whyLocal: {
+    label: 'location page why local customers should choose this business',
+    maxWords: 150,
+  },
+  serviceArea: {
+    label: 'location page service area description',
+    maxWords: 120,
+  },
+};
+
+function getNestedField(obj, path) {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+
+function setNestedField(obj, path, value) {
+  const parts = path.split('.');
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    if (!current[parts[i]] || typeof current[parts[i]] !== 'object') {
+      current[parts[i]] = {};
+    }
+    current = current[parts[i]];
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+function normalizePageStructure(pageType, content) {
+  const result = { ...content };
+
+  if (pageType === 'about') {
+    result.story = result.story && typeof result.story === 'object' ? { ...result.story } : {};
+    if (result.paragraph2 && !result.story.paragraph2) {
+      result.story.paragraph2 = result.paragraph2;
+      delete result.paragraph2;
+    }
+    if (result.paragraph1 && !result.story.paragraph1) {
+      result.story.paragraph1 = result.paragraph1;
+      delete result.paragraph1;
+    }
+    result.team = result.team && typeof result.team === 'object' ? { ...result.team } : {};
+  }
+
+  if (pageType === 'home') {
+    result.about = result.about && typeof result.about === 'object' ? { ...result.about } : {};
+    if (result.paragraph1 && !result.about.paragraph1) {
+      result.about.paragraph1 = result.paragraph1;
+      delete result.paragraph1;
+    }
+    if (result.paragraph2 && !result.about.paragraph2) {
+      result.about.paragraph2 = result.paragraph2;
+      delete result.paragraph2;
+    }
+  }
+
+  return result;
+}
+
+async function expandShortTextFields(content, issues, businessData, systemPrompt) {
+  const result = JSON.parse(JSON.stringify(content));
+
+  await Promise.all(
+    issues
+      .filter((issue) => !issue.field.startsWith('posts['))
+      .map(async (issue) => {
+        const spec = TEXT_FIELD_EXPANSION_SPECS[issue.field];
+        if (!spec) return;
+
+        const currentText = getNestedField(result, issue.field);
+        const draft =
+          typeof currentText === 'string' && currentText.trim()
+            ? currentText
+            : 'Write fresh content for this section.';
+
+        const expandedText = await expandTextField(businessData, systemPrompt, {
+          label: spec.label,
+          currentText: draft,
+          minWords: issue.minimum,
+          maxWords: spec.maxWords,
+          contextNote:
+            typeof currentText === 'string' && currentText.trim()
+              ? ''
+              : 'This section was missing from the draft — write it from scratch.',
+        });
+        setNestedField(result, issue.field, expandedText);
+      }),
+  );
+
+  return result;
+}
+
+/**
+ * Generates a single blog post in its own completion so each article reliably
+ * reaches the 400-500 word SEO target.
+ */
+async function generateBlogPost(businessData, postOutline, systemPrompt, postIndex) {
+  const { businessName, industry, city, state } = businessData;
+  const title = postOutline?.title || `Blog post ${postIndex + 1}`;
+  const category = postOutline?.category || 'Tips';
+
+  const userPrompt = [
+    `Write a complete blog post for ${businessName}, a ${industry} business in ${city}, ${state}.`,
+    `Title: "${title}". Category: ${category}.`,
+    postOutline?.excerpt ? `Summary theme: ${postOutline.excerpt}` : '',
+    buildSeoRequirements(businessData),
+    'Return ONLY valid JSON with this exact structure:',
+    '{ "title": "...", "excerpt": "40-60 words", "category": "...", "readTime": "X min read",',
+    '"introduction": "80-100 words",',
+    '"sections": [',
+    '{ "heading": "clear H2, max 8 words", "paragraphs": ["150-175 words with local and industry keywords"] },',
+    '{ "heading": "clear H2, max 8 words", "paragraphs": ["150-175 words with practical advice and local relevance"] }',
+    '],',
+    '"conclusion": "80-100 words",',
+    '"faqs": [',
+    '{ "question": "real customer question", "answer": "40-70 words" },',
+    '{ "question": "different real customer question", "answer": "40-70 words" },',
+    '{ "question": "third real customer question", "answer": "40-70 words" }',
+    '] }',
+    'Introduction + all section paragraphs + conclusion combined MUST total at least 400 words.',
+    'Write genuinely useful, distinct content — no filler or repetition.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const raw = await callOpenAiForPage(systemPrompt, userPrompt, 2500);
+      const parsed = parseJsonContent(raw);
+      const words = countBlogPostWords(parsed);
+      if (words >= MIN_BLOG_POST_WORDS) {
+        return parsed;
+      }
+      if (attempt < 3) {
+        console.warn(
+          JSON.stringify({
+            event: 'blog_post_retry',
+            postIndex,
+            title,
+            words,
+            businessName,
+            attempt,
+          }),
+        );
+        continue;
+      }
+      return parsed;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw lastError ?? new Error(`Failed to generate blog post "${title}"`);
+}
+
+/**
+ * Blog page: outline first, then expand each post in parallel.
+ */
+async function generateBlogPageContent(businessData, pageSchema, systemPrompt, contextNote) {
+  const shellNote = [
+    contextNote,
+    'Generate exactly 3 distinct blog posts. For each post provide only title, excerpt, category, and readTime.',
+    'Use one-sentence placeholders for introduction, sections, conclusion, and FAQs — full post bodies are written separately.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const shellPrompt = buildPagePrompt(businessData, pageSchema, 'blog', shellNote);
+  let shell;
+  let lastError;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const raw = await callOpenAiForPage(systemPrompt, shellPrompt, 2500);
+      shell = parseJsonContent(raw);
+      break;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  if (!shell) {
+    throw lastError ?? new Error('Failed to generate blog page shell');
+  }
+
+  const outlines = Array.isArray(shell.posts) ? shell.posts.slice(0, 3) : [];
+  if (outlines.length === 0) {
+    return shell;
+  }
+
+  const expandedPosts = await Promise.all(
+    outlines.map(async (outline, index) => {
+      try {
+        return await generateBlogPost(businessData, outline, systemPrompt, index);
+      } catch (e) {
+        console.warn(
+          JSON.stringify({
+            event: 'blog_post_failed',
+            postIndex: index,
+            title: outline?.title,
+            error: e?.message ?? String(e),
+            businessName: businessData?.businessName,
+          }),
+        );
+        return outline;
+      }
+    }),
+  );
+
+  const assembled = { ...shell, posts: expandedPosts };
+  return ensureMinimumContentLength('blog', assembled, businessData, systemPrompt);
+}
+
+/**
+ * Expands any body fields that still fall below SEO minimums after the initial
+ * page generation pass.
+ */
+async function ensureMinimumContentLength(pageType, content, businessData, systemPrompt) {
+  let result = normalizePageStructure(pageType, content);
+
+  for (let pass = 1; pass <= 2; pass += 1) {
+    const issues = validatePageContentLength(pageType, result);
+    if (issues.length === 0) {
+      return result;
+    }
+
+    const blogIssues = issues.filter((issue) => issue.field.startsWith('posts['));
+    const textIssues = issues.filter((issue) => !issue.field.startsWith('posts['));
+
+    if (textIssues.length > 0) {
+      result = await expandShortTextFields(result, textIssues, businessData, systemPrompt);
+    }
+
+    if (blogIssues.length > 0 && Array.isArray(result.posts)) {
+      const indexes = [
+        ...new Set(
+          blogIssues
+            .map((issue) => {
+              const match = issue.field.match(/^posts\[(\d+)\]/);
+              return match ? Number(match[1]) : null;
+            })
+            .filter((index) => index != null),
+        ),
+      ];
+
+      const posts = [...result.posts];
+      await Promise.all(
+        indexes.map(async (index) => {
+          if (!posts[index]) return;
+          try {
+            posts[index] = await generateBlogPost(
+              businessData,
+              posts[index],
+              systemPrompt,
+              index,
+            );
+          } catch (e) {
+            console.warn(
+              JSON.stringify({
+                event: 'blog_post_expand_failed',
+                postIndex: index,
+                pass,
+                error: e?.message ?? String(e),
+                businessName: businessData?.businessName,
+              }),
+            );
+          }
+        }),
+      );
+      result = { ...result, posts };
+    }
+
+    console.warn(
+      JSON.stringify({
+        event: 'page_content_expand_pass',
+        pageType,
+        pass,
+        issueCount: issues.length,
+        businessName: businessData?.businessName,
+      }),
+    );
+  }
+
+  const remaining = validatePageContentLength(pageType, result);
+  if (remaining.length > 0) {
+    console.warn(
+      JSON.stringify({
+        event: 'page_content_length_below_minimum',
+        pageType,
+        issues: remaining,
+        businessName: businessData?.businessName,
+      }),
+    );
+  }
+
+  return result;
+}
+
+/**
  * Generates a single service fullDescription in its own completion so the model
  * can reliably reach 200-250 words. Packing 8 long descriptions into one JSON
  * object causes every model to compress each field.
@@ -536,7 +912,17 @@ export async function generatePageContent(
   contextNote = '',
 ) {
   if (pageType === 'services') {
-    return generateServicesPageContent(
+    const content = await generateServicesPageContent(
+      businessData,
+      pageSchema,
+      systemPrompt,
+      contextNote,
+    );
+    return ensureMinimumContentLength('services', content, businessData, systemPrompt);
+  }
+
+  if (pageType === 'blog') {
+    return generateBlogPageContent(
       businessData,
       pageSchema,
       systemPrompt,
@@ -544,46 +930,16 @@ export async function generatePageContent(
     );
   }
 
-  let userPrompt = buildPagePrompt(businessData, pageSchema, pageType, contextNote);
-
+  const userPrompt = buildPagePrompt(businessData, pageSchema, pageType, contextNote);
   const maxTokens = MAX_TOKENS_BY_PAGE[pageType] ?? 4500;
-  const maxAttempts = 3;
+  const maxAttempts = 2;
 
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const raw = await callOpenAiForPage(systemPrompt, userPrompt, maxTokens);
-      const content = parseJsonContent(raw);
-      const lengthIssues = validatePageContentLength(pageType, content);
-
-      if (lengthIssues.length === 0) {
-        return content;
-      }
-
-      if (attempt < maxAttempts) {
-        console.warn(
-          JSON.stringify({
-            event: 'page_content_too_short_retry',
-            pageType,
-            attempt,
-            issues: lengthIssues,
-            businessName: businessData?.businessName,
-          }),
-        );
-        userPrompt = `${userPrompt}${buildLengthRetryFeedback(lengthIssues)}`;
-        continue;
-      }
-
-      // Last attempt: accept best effort but log so ops can monitor.
-      console.warn(
-        JSON.stringify({
-          event: 'page_content_length_below_minimum',
-          pageType,
-          issues: lengthIssues,
-          businessName: businessData?.businessName,
-        }),
-      );
-      return content;
+      const content = normalizePageStructure(pageType, parseJsonContent(raw));
+      return ensureMinimumContentLength(pageType, content, businessData, systemPrompt);
     } catch (e) {
       lastError = e;
       console.warn(
@@ -708,6 +1064,29 @@ export async function generateSite(formData) {
         theme,
       }),
     );
+
+    try {
+      const locationPages = await generateDefaultLocationPagesForSite(site.id);
+      if (locationPages.length > 0) {
+        console.info(
+          JSON.stringify({
+            event: 'site_default_location_pages_created',
+            siteId: site.id,
+            slug: site.slug,
+            count: locationPages.length,
+          }),
+        );
+      }
+    } catch (locationError) {
+      console.warn(
+        JSON.stringify({
+          event: 'site_default_location_pages_failed',
+          siteId: site.id,
+          slug: site.slug,
+          error: locationError?.message ?? String(locationError),
+        }),
+      );
+    }
 
     return site;
   } catch (e) {

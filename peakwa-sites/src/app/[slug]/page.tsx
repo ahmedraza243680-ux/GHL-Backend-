@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { SITE_BASE_URL } from '@/src/config/config';
-import { ArrowRight, ChevronDown, Phone, Quote, Star } from 'lucide-react';
+import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { ArrowRight, ChevronDown, MapPin, Phone, Quote, Star } from 'lucide-react';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { FAQSchema, LocalBusinessSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
-import { getSiteBySlug } from '@/src/lib/api';
+import { getLocationPages, getSiteBySlug } from '@/src/lib/api';
 import { parseJson, type HomeContent } from '@/src/lib/content';
 import { getIcon } from '@/src/lib/iconMap';
 import { getSiteImages } from '@/src/lib/images';
@@ -29,8 +29,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description:
       home?.seo?.metaDescription ||
       `${site.businessName} serving ${site.city} ${site.state}`,
-    alternates: { canonical: `${SITE_BASE_URL}/${site.slug}` },
-    robots: { index: false, follow: false },
+    alternates: { canonical: buildCanonicalUrl(site.slug) },
+    robots: getSiteRobots(),
+    openGraph: {
+      title: home?.seo?.title || `${site.businessName} | ${site.city}, ${site.state}`,
+      description:
+        home?.seo?.metaDescription ||
+        `${site.businessName} serving ${site.city} ${site.state}`,
+      url: buildCanonicalUrl(site.slug),
+      siteName: site.businessName,
+      locale: 'en_US',
+      type: 'website',
+    },
   };
 }
 
@@ -168,12 +178,41 @@ const processSteps = [
   },
 ];
 
+function getLocationCardImage(
+  images: Awaited<ReturnType<typeof getSiteImages>>,
+  index: number,
+): string | null {
+  if (images.services[index % Math.max(images.services.length, 1)]) {
+    return images.services[index % images.services.length] ?? null;
+  }
+  if (index % 2 === 0 && images.hero) return images.hero;
+  if (images.about) return images.about;
+  return images.hero;
+}
+
+function getLocationExcerpt(content: string | null | undefined): string {
+  if (!content) return '';
+  try {
+    const parsed = JSON.parse(content) as {
+      heroSubheading?: string;
+      localIntro?: string;
+    };
+    if (parsed.heroSubheading?.trim()) return parsed.heroSubheading.trim();
+    const intro = parsed.localIntro?.trim() ?? '';
+    if (intro.length <= 140) return intro;
+    return `${intro.slice(0, 137).trimEnd()}...`;
+  } catch {
+    return '';
+  }
+}
+
 export default async function HomePage({ params }: PageProps) {
   const { slug } = await params;
   const site = await getSiteBySlug(slug);
   if (!site) notFound();
 
   const images = await getSiteImages(slug);
+  const locations = await getLocationPages(slug);
   const content = parseJson<HomeContent>(site.homeContent, {});
   const theme = resolveTheme(site);
   const hero = content.hero ?? {};
@@ -330,18 +369,18 @@ export default async function HomePage({ params }: PageProps) {
 
       <SectionWrapper
         background="#fff"
-        className="py-24"
+        className="py-20 md:py-24"
         style={{ borderTop: `4px solid ${theme.accentColor}` }}
       >
-        <div className="grid items-center gap-12 md:grid-cols-2">
+        <div className="mx-auto max-w-6xl">
           {images.about ? (
-            <div className="relative h-[300px] w-full overflow-hidden rounded-3xl md:h-full md:min-h-[420px]">
+            <div className="relative h-[220px] w-full overflow-hidden rounded-2xl shadow-md sm:h-[260px] md:h-[300px]">
               <SiteImage
                 src={images.about}
                 alt={`About ${site.businessName}`}
                 fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover object-center"
+                sizes="100vw"
                 fallback={
                   <div
                     className="h-full w-full"
@@ -349,45 +388,36 @@ export default async function HomePage({ params }: PageProps) {
                   />
                 }
               />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to top, ${colorWithOpacity(theme.primaryColor, 0.55)}, transparent 55%)`,
+                }}
+              />
             </div>
           ) : (
-            <div className="relative h-64 md:h-80">
-              <div
-                className="absolute inset-4 rounded-3xl"
-                style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
-              />
-              <div
-                className="absolute bottom-0 right-0 h-40 w-40 rounded-2xl"
-                style={{ backgroundColor: theme.accentColor }}
-              />
-              <div
-                className="absolute left-6 top-6 h-24 w-24 rounded-full border-4 bg-white"
-                style={{ borderColor: theme.primaryColor }}
-              />
-              <div
-                className="absolute bottom-12 left-12 h-16 w-16 rotate-45 rounded-lg"
-                style={{ backgroundColor: colorWithOpacity(theme.primaryColor, 0.3) }}
-              />
-            </div>
+            <div
+              className="relative h-[220px] w-full overflow-hidden rounded-2xl sm:h-[260px] md:h-[300px]"
+              style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.12) }}
+            />
           )}
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">
+
+          <div className="mt-10 md:mt-12">
+            <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
               {about.heading || 'About Us'}
             </h2>
             <div
-              className="my-6 h-1 w-16 rounded-full"
+              className="my-5 h-1 w-14 rounded-full"
               style={{ backgroundColor: theme.accentColor }}
             />
-            <p className="text-lg leading-relaxed text-gray-600">
-              {about.paragraph1 || site.description}
-            </p>
-            <div
-              className="my-6 h-px w-full"
-              style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.35) }}
-            />
-            <p className="text-lg leading-relaxed text-gray-600">
-              {about.paragraph2 || `Proudly serving ${site.city} and nearby communities.`}
-            </p>
+            <div className="grid gap-8 md:grid-cols-2 md:gap-10">
+              <p className="text-base leading-7 text-gray-600 md:text-[17px] md:leading-8">
+                {about.paragraph1 || site.description}
+              </p>
+              <p className="text-base leading-7 text-gray-600 md:text-[17px] md:leading-8">
+                {about.paragraph2 || `Proudly serving ${site.city} and nearby communities.`}
+              </p>
+            </div>
           </div>
         </div>
       </SectionWrapper>
@@ -577,34 +607,108 @@ export default async function HomePage({ params }: PageProps) {
       </SectionWrapper>
 
       <SectionWrapper background={theme.primaryColor} className="py-20">
-        <div className="mx-auto max-w-4xl text-center" style={{ color: areaText }}>
-          <h2 className="text-3xl font-bold">
-            Serving {site.city} and Surrounding Areas
-          </h2>
-          <div
-            className="mx-auto mt-4 h-1 w-16 rounded-full"
-            style={{ backgroundColor: theme.accentColor }}
-          />
-          <p className="mt-6 text-lg leading-relaxed" style={{ color: areaMuted }}>
-            {site.businessName} is proud to serve {site.city}, {site.state} and the surrounding
-            communities. As a local {site.industry} provider, we understand the needs of our
-            neighbors and are committed to reliable, friendly service right in your backyard.
-          </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-3">
-            {nearbyAreas.map((area) => (
-              <span
-                key={area}
-                className="rounded-full border px-4 py-2 text-sm font-medium"
-                style={{
-                  borderColor: colorWithOpacity(areaPillBase, 0.3),
-                  backgroundColor: colorWithOpacity(areaPillBase, 0.12),
-                  color: areaText,
-                }}
-              >
-                {area}
-              </span>
-            ))}
+        <div className="mx-auto max-w-6xl" style={{ color: areaText }}>
+          <div className="text-center">
+            <h2 className="text-3xl font-bold">
+              {locations.length > 0
+                ? `Areas We Serve Near ${site.city}`
+                : `Serving ${site.city} and Surrounding Areas`}
+            </h2>
+            <div
+              className="mx-auto mt-4 h-1 w-16 rounded-full"
+              style={{ backgroundColor: theme.accentColor }}
+            />
+            <p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed" style={{ color: areaMuted }}>
+              {locations.length > 0
+                ? `${site.businessName} provides trusted ${site.industry} services across ${site.city}, ${site.state} and these nearby communities. Select your area to learn about local services, neighborhoods we cover, and why neighbors choose us.`
+                : `${site.businessName} is proud to serve ${site.city}, ${site.state} and the surrounding communities. As a local ${site.industry} provider, we understand the needs of our neighbors and are committed to reliable, friendly service right in your backyard.`}
+            </p>
           </div>
+
+          {locations.length > 0 ? (
+            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {locations.map((location, index) => {
+                const cardImage = getLocationCardImage(images, index);
+                const excerpt =
+                  getLocationExcerpt(location.content) ||
+                  `${site.industry} services in ${location.city}, ${location.state}`;
+
+                return (
+                  <Link
+                    key={location.id}
+                    href={`/${slug}/${location.slug}`}
+                    className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-lg transition duration-300 hover:-translate-y-1 hover:shadow-xl"
+                    style={{ borderTop: `4px solid ${theme.accentColor}` }}
+                  >
+                    <div className="relative h-[200px] w-full overflow-hidden">
+                      {cardImage ? (
+                        <SiteImage
+                          src={cardImage}
+                          alt={`${site.businessName} serving ${location.city}, ${location.state}`}
+                          fill
+                          className="object-cover transition duration-300 group-hover:scale-105"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          fallback={
+                            <div
+                              className="flex h-full items-center justify-center"
+                              style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                            >
+                              <MapPin className="h-10 w-10" style={{ color: theme.accentColor }} />
+                            </div>
+                          }
+                        />
+                      ) : (
+                        <div
+                          className="flex h-full items-center justify-center"
+                          style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                        >
+                          <MapPin className="h-10 w-10" style={{ color: theme.accentColor }} />
+                        </div>
+                      )}
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: `linear-gradient(to top, ${colorWithOpacity(theme.primaryColor, 0.75)}, transparent)`,
+                        }}
+                      />
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <p className="text-lg font-bold text-white">{location.city}</p>
+                        <p className="text-sm text-white/85">
+                          {location.county} County, {location.state}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-1 flex-col p-6">
+                      <p className="flex-1 text-sm leading-relaxed text-gray-600">{excerpt}</p>
+                      <span
+                        className="mt-5 inline-flex items-center gap-2 text-sm font-semibold"
+                        style={{ color: theme.accentColor }}
+                      >
+                        View {location.city} Services{' '}
+                        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-10 flex flex-wrap justify-center gap-3">
+              {nearbyAreas.map((area) => (
+                <span
+                  key={area}
+                  className="rounded-full border px-4 py-2 text-sm font-medium"
+                  style={{
+                    borderColor: colorWithOpacity(areaPillBase, 0.3),
+                    backgroundColor: colorWithOpacity(areaPillBase, 0.12),
+                    color: areaText,
+                  }}
+                >
+                  {area}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </SectionWrapper>
 

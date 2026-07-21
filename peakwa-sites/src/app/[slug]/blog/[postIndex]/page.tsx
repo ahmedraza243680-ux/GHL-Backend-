@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { SITE_BASE_URL } from '@/src/config/config';
+import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { ArticleSchema, FAQSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
@@ -31,8 +31,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${post.title} | ${site.businessName}`,
     description: post.excerpt,
-    alternates: { canonical: `${SITE_BASE_URL}/${site.slug}/blog/${postIndex}` },
-    robots: { index: false, follow: false },
+    alternates: { canonical: buildCanonicalUrl(site.slug, 'blog', postIndex) },
+    robots: getSiteRobots(),
   };
 }
 

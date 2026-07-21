@@ -1,13 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { IS_SEARCH_INDEXABLE, SITE_BASE_URL } from '@/src/config/config';
 
-type RobotsProps = {
-  params: Promise<{ slug: string }>;
-};
-
-export default async function robots({ params }: RobotsProps): Promise<MetadataRoute.Robots> {
-  const { slug } = await params;
-
+/** Root robots.txt — allows crawlers when the deployment URL is indexable. */
+export default function robots(): MetadataRoute.Robots {
   if (!IS_SEARCH_INDEXABLE) {
     return {
       rules: { userAgent: '*', disallow: '/' },
@@ -18,7 +13,6 @@ export default async function robots({ params }: RobotsProps): Promise<MetadataR
 
   return {
     rules: { userAgent: '*', allow: '/' },
-    sitemap: `${base}/${slug}/sitemap.xml`,
     host: base,
   };
 }

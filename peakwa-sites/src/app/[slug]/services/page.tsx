@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { SITE_BASE_URL } from '@/src/config/config';
+import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { HeroBanner } from '@/src/components/HeroBanner';
@@ -31,8 +31,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description:
       services?.seo?.metaDescription ||
       `Professional ${site.industry} services by ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: `${SITE_BASE_URL}/${site.slug}/services` },
-    robots: { index: false, follow: false },
+    alternates: { canonical: buildCanonicalUrl(site.slug, 'services') },
+    robots: getSiteRobots(),
   };
 }
 

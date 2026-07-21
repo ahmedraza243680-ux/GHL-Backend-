@@ -9,6 +9,7 @@ import { getLocationPages } from '@/src/lib/api';
 import type { GeneratedSite } from '@/src/lib/types';
 import { parseJson, type ServicesContent } from '@/src/lib/content';
 import { resolveTheme } from '@/src/lib/theme';
+import { getMetadataBase, getSiteRobots } from '@/src/lib/seo';
 import clsx from 'clsx';
 
 type LayoutProps = {
@@ -31,8 +32,10 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
   if (!site) return { title: 'Site Not Found' };
 
   return {
+    metadataBase: getMetadataBase(),
     title: site.businessName,
-    robots: { index: false, follow: false },
+    description: `${site.businessName} — ${site.industry} in ${site.city}, ${site.state}`,
+    robots: getSiteRobots(),
   };
 }
 

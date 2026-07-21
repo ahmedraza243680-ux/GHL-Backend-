@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { SITE_BASE_URL } from '@/src/config/config';
+import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { HeroBanner } from '@/src/components/HeroBanner';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
@@ -26,8 +26,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description:
       about?.seo?.metaDescription ||
       `Learn about ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: `${SITE_BASE_URL}/${site.slug}/about` },
-    robots: { index: false, follow: false },
+    alternates: { canonical: buildCanonicalUrl(site.slug, 'about') },
+    robots: getSiteRobots(),
   };
 }
 

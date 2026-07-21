@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Mail, MapPin, Phone } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { SITE_BASE_URL } from '@/src/config/config';
+import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { ContactForm } from '@/src/components/ContactForm';
 import { HeroBanner } from '@/src/components/HeroBanner';
@@ -28,8 +28,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description:
       contact?.seo?.metaDescription ||
       `Contact ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: `${SITE_BASE_URL}/${site.slug}/contact` },
-    robots: { index: false, follow: false },
+    alternates: { canonical: buildCanonicalUrl(site.slug, 'contact') },
+    robots: getSiteRobots(),
   };
 }
 

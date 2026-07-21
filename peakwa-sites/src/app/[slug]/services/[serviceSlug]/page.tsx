@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, Phone } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { SITE_BASE_URL } from '@/src/config/config';
+import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { FaqAccordion } from '@/src/components/FaqAccordion';
@@ -88,9 +88,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       service.fullDescription?.slice(0, 155) ||
       '',
     alternates: {
-      canonical: `${SITE_BASE_URL}/${slug}/services/${serviceSlug}`,
+      canonical: buildCanonicalUrl(slug, 'services', serviceSlug),
     },
-    robots: { index: false, follow: false },
+    robots: getSiteRobots(),
   };
 }
 
