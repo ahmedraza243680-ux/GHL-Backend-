@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
 
   const slug = body.slug?.trim() || request.nextUrl.searchParams.get('slug')?.trim();
   if (slug) {
-    revalidateTag(siteCacheTag(slug));
+    revalidateTag(siteCacheTag(slug), { expire: 0 });
   } else {
-    revalidateTag(ALL_SITES_CACHE_TAG);
+    revalidateTag(ALL_SITES_CACHE_TAG, { expire: 0 });
   }
 
   return NextResponse.json({
