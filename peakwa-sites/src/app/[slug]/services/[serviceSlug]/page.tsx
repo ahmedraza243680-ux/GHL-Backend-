@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, Phone } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { FaqAccordion } from '@/src/components/FaqAccordion';
@@ -77,21 +77,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!service) return {};
 
   const content = (await getServicePageContent(slug, serviceSlug)) as ServicePageContent | null;
+  if (!content?.seo?.title || !content?.seo?.metaDescription) return {};
 
-  return {
-    // Title is deterministic and built from the unique per-service title so each
-    // service page stays distinct instead of reusing a generic AI seo.title.
-    title: `${service.title} | ${site.businessName} | ${site.city}, ${site.state}`,
-    description:
-      content?.seo?.metaDescription ||
-      service.shortDescription ||
-      service.fullDescription?.slice(0, 155) ||
-      '',
-    alternates: {
-      canonical: buildCanonicalUrl(slug, 'services', serviceSlug),
-    },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: content.seo.title,
+    description: content.seo.metaDescription,
+    pathParts: [slug, 'services', serviceSlug],
+  });
 }
 
 export default async function ServiceDetailPage({ params }: PageProps) {

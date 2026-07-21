@@ -33,8 +33,6 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
 
   return {
     metadataBase: getMetadataBase(),
-    title: site.businessName,
-    description: `${site.businessName} — ${site.industry} in ${site.city}, ${site.state}`,
     robots: getSiteRobots(),
   };
 }

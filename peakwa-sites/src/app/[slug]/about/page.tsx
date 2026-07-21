@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { HeroBanner } from '@/src/components/HeroBanner';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
@@ -18,17 +18,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!site) return {};
 
   const about = parseJson<AboutContent>(site.aboutContent, {});
+  if (!about.seo?.title || !about.seo?.metaDescription) return {};
 
-  return {
-    // Title is deterministic and page-distinct so it can never collide with the
-    // home/services titles the way the generic AI-generated seo.title does.
-    title: `About ${site.businessName} | ${site.city}, ${site.state}`,
-    description:
-      about?.seo?.metaDescription ||
-      `Learn about ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: buildCanonicalUrl(site.slug, 'about') },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: about.seo.title,
+    description: about.seo.metaDescription,
+    pathParts: [site.slug, 'about'],
+  });
 }
 
 function colorWithOpacity(hex: string, opacity: number) {

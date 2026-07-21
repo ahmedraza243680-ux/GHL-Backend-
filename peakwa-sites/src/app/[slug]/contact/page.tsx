@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Mail, MapPin, Phone } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { ContactForm } from '@/src/components/ContactForm';
 import { HeroBanner } from '@/src/components/HeroBanner';
@@ -20,17 +20,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!site) return {};
 
   const contact = parseJson<ContactContent>(site.contactContent, {});
+  if (!contact.seo?.title || !contact.seo?.metaDescription) return {};
 
-  return {
-    // Title is deterministic and page-distinct so it can never collide with the
-    // other pages the way the generic AI-generated seo.title does.
-    title: `Contact ${site.businessName} | ${site.city}, ${site.state}`,
-    description:
-      contact?.seo?.metaDescription ||
-      `Contact ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: buildCanonicalUrl(site.slug, 'contact') },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: contact.seo.title,
+    description: contact.seo.metaDescription,
+    pathParts: [site.slug, 'contact'],
+  });
 }
 
 export default async function ContactPage({ params }: PageProps) {

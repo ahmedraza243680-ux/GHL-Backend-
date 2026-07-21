@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, Clock } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
@@ -22,15 +22,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!site) return {};
 
   const blog = parseJson<BlogContent>(site.blogContent, {});
+  if (!blog.seo?.title || !blog.seo?.metaDescription) return {};
 
-  return {
-    title: `Blog | ${site.businessName} | ${site.city}, ${site.state}`,
-    description:
-      blog?.seo?.metaDescription ||
-      `Latest updates and tips from ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: buildCanonicalUrl(site.slug, 'blog') },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: blog.seo.title,
+    description: blog.seo.metaDescription,
+    pathParts: [site.slug, 'blog'],
+  });
 }
 
 function colorWithOpacity(hex: string, opacity: number) {

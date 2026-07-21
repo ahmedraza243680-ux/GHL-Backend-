@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Clock, MapPin, Phone, Users } from 'lucide-react';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { FaqAccordion } from '@/src/components/FaqAccordion';
 import { FAQSchema, LocationAreaSchema } from '@/src/components/SchemaMarkup';
@@ -61,15 +61,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!page) return {};
 
   const content = parseJson<LocationPageContent>(page.content, {});
-  const fallbackTitle = `${site.businessName} | ${page.city}, ${page.state}`;
-  const fallbackDescription = `${site.businessName} serving ${page.city}, ${page.state} and surrounding neighborhoods`;
+  if (!content.seo?.title || !content.seo?.metaDescription) return {};
 
-  return {
-    title: content.seo?.title || fallbackTitle,
-    description: content.seo?.metaDescription || fallbackDescription,
-    alternates: { canonical: buildCanonicalUrl(site.slug, locationSlug) },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: content.seo.title,
+    description: content.seo.metaDescription,
+    pathParts: [site.slug, locationSlug],
+  });
 }
 
 export default async function LocationPage({ params }: PageProps) {

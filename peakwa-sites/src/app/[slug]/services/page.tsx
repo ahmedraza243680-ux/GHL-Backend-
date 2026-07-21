@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { HeroBanner } from '@/src/components/HeroBanner';
@@ -23,17 +23,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!site) return {};
 
   const services = parseJson<ServicesContent>(site.servicesContent, {});
+  if (!services.seo?.title || !services.seo?.metaDescription) return {};
 
-  return {
-    // Title is deterministic and page-distinct so it can never collide with the
-    // home/about titles the way the generic AI-generated seo.title does.
-    title: `Services | ${site.businessName} | ${site.city}, ${site.state}`,
-    description:
-      services?.seo?.metaDescription ||
-      `Professional ${site.industry} services by ${site.businessName} in ${site.city} ${site.state}`,
-    alternates: { canonical: buildCanonicalUrl(site.slug, 'services') },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: services.seo.title,
+    description: services.seo.metaDescription,
+    pathParts: [site.slug, 'services'],
+  });
 }
 
 function colorWithOpacity(hex: string, opacity: number) {

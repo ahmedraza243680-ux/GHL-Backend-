@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { Breadcrumbs } from '@/src/components/Breadcrumbs';
 import { ArticleSchema, FAQSchema } from '@/src/components/SchemaMarkup';
 import { SectionWrapper } from '@/src/components/SectionWrapper';
@@ -27,13 +27,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const blog = parseJson<BlogContent>(site.blogContent, {});
   const post = blog?.posts?.[Number.parseInt(postIndex, 10)];
   if (!post) return {};
+  if (!post.seo?.title || !post.seo?.metaDescription) return {};
 
-  return {
-    title: `${post.title} | ${site.businessName}`,
-    description: post.excerpt,
-    alternates: { canonical: buildCanonicalUrl(site.slug, 'blog', postIndex) },
-    robots: getSiteRobots(),
-  };
+  return buildPageMetadata({
+    site,
+    title: post.seo.title,
+    description: post.seo.metaDescription,
+    pathParts: [site.slug, 'blog', postIndex],
+    openGraphType: 'article',
+  });
 }
 
 /** Legacy posts store a single flat string; split it into clean paragraphs. */

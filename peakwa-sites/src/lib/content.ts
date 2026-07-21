@@ -55,6 +55,7 @@ export type BlogPost = {
   sections?: BlogSection[];
   conclusion?: string;
   faqs?: BlogFaq[];
+  seo?: SeoContent;
 };
 
 export type BlogContent = {

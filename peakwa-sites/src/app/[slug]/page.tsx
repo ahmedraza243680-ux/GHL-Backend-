@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { buildCanonicalUrl, getSiteRobots } from '@/src/lib/seo';
+import { buildPageMetadata } from '@/src/lib/seo';
 import { ArrowRight, ChevronDown, MapPin, Phone, Quote, Star } from 'lucide-react';
 import { CtaBanner } from '@/src/components/CtaBanner';
 import { FAQSchema, LocalBusinessSchema, WebSiteSchema } from '@/src/components/SchemaMarkup';
@@ -23,25 +23,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!site) return {};
 
   const home = parseJson<HomeContent>(site.homeContent, {});
+  if (!home.seo?.title || !home.seo?.metaDescription) return {};
 
-  return {
-    title: home?.seo?.title || `${site.businessName} | ${site.city}, ${site.state}`,
-    description:
-      home?.seo?.metaDescription ||
-      `${site.businessName} serving ${site.city} ${site.state}`,
-    alternates: { canonical: buildCanonicalUrl(site.slug) },
-    robots: getSiteRobots(),
-    openGraph: {
-      title: home?.seo?.title || `${site.businessName} | ${site.city}, ${site.state}`,
-      description:
-        home?.seo?.metaDescription ||
-        `${site.businessName} serving ${site.city} ${site.state}`,
-      url: buildCanonicalUrl(site.slug),
-      siteName: site.businessName,
-      locale: 'en_US',
-      type: 'website',
-    },
-  };
+  return buildPageMetadata({
+    site,
+    title: home.seo.title,
+    description: home.seo.metaDescription,
+    pathParts: [site.slug],
+  });
 }
 
 function colorWithOpacity(hex: string, opacity: number) {
