@@ -9,7 +9,6 @@ import { SectionWrapper } from '@/src/components/SectionWrapper';
 import { SiteImage } from '@/src/components/SiteImage';
 import { getLocationPages, getSiteBySlug } from '@/src/lib/api';
 import { parseJson } from '@/src/lib/content';
-import { getSiteImages, type SiteImages } from '@/src/lib/images';
 import { getTextColor, hexToRgb, resolveTheme } from '@/src/lib/theme';
 import type { GeneratedSite } from '@/src/lib/types';
 
@@ -52,30 +51,6 @@ function resolveHeroSubheading(content: LocationPageContent, site: GeneratedSite
   );
 }
 
-/** Picks a hero image for this location — same fallback chain as service pages. */
-function resolveLocationHeroImage(images: SiteImages, locationIndex: number): string | null {
-  const serviceCount = images.services.length;
-  if (serviceCount > 0) {
-    const serviceImage = images.services[locationIndex % serviceCount];
-    if (serviceImage) return serviceImage;
-  }
-  if (images.hero) return images.hero;
-  if (images.about) return images.about;
-  return null;
-}
-
-function resolveLocationSectionImage(
-  images: SiteImages,
-  locationIndex: number,
-): string | null {
-  if (images.about) return images.about;
-  const serviceCount = images.services.length;
-  if (serviceCount > 0) {
-    return images.services[(locationIndex + 1) % serviceCount] ?? images.services[0] ?? null;
-  }
-  return images.hero;
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug, locationSlug } = await params;
   const site = await getSiteBySlug(slug);
@@ -108,14 +83,7 @@ export default async function LocationPage({ params }: PageProps) {
 
   const content = parseJson<LocationPageContent>(page.content, {});
   const theme = resolveTheme(site);
-  const images = await getSiteImages(slug);
-  const locationIndex = Math.max(
-    0,
-    pages.findIndex((entry) => entry.slug === locationSlug),
-  );
-
-  const heroImage = resolveLocationHeroImage(images, locationIndex);
-  const sectionImage = resolveLocationSectionImage(images, locationIndex);
+  const heroImage = page.imageUrl;
   const heroHeading = resolveHeroHeading(content, site, page.city);
   const heroSubheading = resolveHeroSubheading(content, site, page.city);
   const heroTextColor = heroImage ? '#FFFFFF' : getTextColor(theme.primaryColor);
@@ -190,32 +158,7 @@ export default async function LocationPage({ params }: PageProps) {
       {content.localIntro ? (
         <SectionWrapper background="#fff">
           <div className="mx-auto max-w-6xl">
-            {sectionImage ? (
-              <div className="relative h-[220px] w-full overflow-hidden rounded-2xl shadow-md sm:h-[260px] md:h-[280px]">
-                <SiteImage
-                  src={sectionImage}
-                  alt={`${site.businessName} serving ${page.city}, ${page.state}`}
-                  fill
-                  className="object-cover object-center"
-                  sizes="100vw"
-                  fallback={
-                    <div
-                      className="flex h-full items-center justify-center"
-                      style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
-                    >
-                      <MapPin className="h-12 w-12" style={{ color: theme.accentColor }} />
-                    </div>
-                  }
-                />
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: `linear-gradient(to top, ${colorWithOpacity(theme.primaryColor, 0.5)}, transparent 55%)`,
-                  }}
-                />
-              </div>
-            ) : null}
-            <div className="mt-10 md:mt-12">
+            <div>
               <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
                 {site.industry.charAt(0).toUpperCase() + site.industry.slice(1)} in {page.city},{' '}
                 {page.state}

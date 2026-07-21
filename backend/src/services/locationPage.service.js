@@ -3,6 +3,7 @@ import prisma from '../database/client.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { getSchemaForIndustry } from './industrySchema.service.js';
+import { fetchPexelsImageByQuery } from './pexels.service.js';
 
 const OPENAI_CONTENT_MODEL = 'gpt-4o';
 
@@ -307,6 +308,72 @@ async function generateLocationPageContent(businessData, location, site, systemP
   return content;
 }
 
+async function generateLocationImageQuery(location, site) {
+  const fallback = `${location.city} ${location.state} neighborhood`;
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    return fallback;
+  }
+
+  try {
+    const client = new OpenAI({ apiKey });
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.7,
+      max_tokens: 30,
+      messages: [
+        {
+          role: 'system',
+          content: 'Return only a 3-5 word Pexels photo search query. Nothing else.',
+        },
+        {
+          role: 'user',
+          content:
+            `Best Pexels photo search query for ${location.city}, ${location.county} County, ${location.state}. ` +
+            `Show a recognizable scenic or neighborhood view of this specific city, suitable for a ${site.industry} business location page. ` +
+            'Include the city name. Return only 3-5 words.',
+        },
+      ],
+    });
+
+    const query = completion.choices?.[0]?.message?.content?.trim();
+    if (!query) {
+      return fallback;
+    }
+
+    return query.replace(/^["']|["']$/g, '');
+  } catch {
+    return fallback;
+  }
+}
+
+export async function generateLocationPageImage(location, site) {
+  const query = await generateLocationImageQuery(location, site);
+
+  console.info(
+    JSON.stringify({
+      event: 'location_image_query',
+      city: location.city,
+      county: location.county,
+      state: location.state,
+      query,
+    }),
+  );
+
+  const imageUrl = await fetchPexelsImageByQuery(query);
+  if (!imageUrl) {
+    console.warn(
+      JSON.stringify({
+        event: 'location_image_empty',
+        city: location.city,
+        query,
+      }),
+    );
+  }
+
+  return imageUrl;
+}
+
 /**
  * Uses AI to discover real neighborhoods and suburbs a local business would serve
  * around its primary city. Called automatically when a new site is generated.
@@ -436,6 +503,8 @@ export async function generateLocationPages(siteId, locations) {
         schema.systemPrompt,
       );
 
+      const imageUrl = await generateLocationPageImage(location, site);
+
       const page = await prisma.locationPage.create({
         data: {
           siteId,
@@ -444,6 +513,7 @@ export async function generateLocationPages(siteId, locations) {
           state: location.state,
           slug: pageSlug,
           content: JSON.stringify(generated),
+          imageUrl,
         },
       });
 

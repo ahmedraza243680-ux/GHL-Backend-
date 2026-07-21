@@ -61,46 +61,57 @@ export default async function AboutPage({ params }: PageProps) {
       </HeroBanner>
 
       <SectionWrapper background="#fff">
-        <div className="grid items-center gap-12 md:grid-cols-2">
-          <div>
+        <div className="grid gap-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-16">
+          <div className={images.about ? 'md:order-2' : ''}>
             <p
-              className="text-6xl font-serif leading-none opacity-20"
+              className="text-sm font-semibold uppercase tracking-widest"
               style={{ color: theme.accentColor }}
             >
-              “
+              Our Story
             </p>
-            <h2 className="text-3xl font-bold text-gray-900">{story.heading || 'Our Story'}</h2>
-            <div className="mt-8 space-y-6 text-lg leading-relaxed text-gray-600">
+            <h2 className="mt-3 text-3xl font-bold text-gray-900 md:text-4xl">
+              {story.heading || 'Our Story'}
+            </h2>
+            <div className="mt-5 h-1 w-16 rounded-full" style={{ backgroundColor: theme.accentColor }} />
+            <div className="mt-8 max-w-2xl space-y-6 text-base leading-8 text-gray-600 md:text-lg md:leading-8">
               <p>{story.paragraph1}</p>
               <p>{story.paragraph2}</p>
             </div>
           </div>
-          {images.about ? (
-            <div className="relative h-[300px] w-full overflow-hidden rounded-3xl md:h-[480px]">
-              <SiteImage
-                src={images.about}
-                alt={`${site.businessName} team and story`}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
-                fallback={
-                  <div
-                    className="h-full w-full"
-                    style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+          <div className={images.about ? 'md:order-1 md:sticky md:top-24 md:self-start' : ''}>
+            {images.about ? (
+              <div className="relative">
+                <div
+                  className="absolute -bottom-5 -right-5 hidden h-full w-full rounded-3xl md:block"
+                  style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                />
+                <div className="relative h-[320px] w-full overflow-hidden rounded-3xl shadow-xl md:h-[600px]">
+                  <SiteImage
+                    src={images.about}
+                    alt={`${site.businessName} team and story`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    fallback={
+                      <div
+                        className="h-full w-full"
+                        style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                      />
+                    }
                   />
-                }
-              />
-            </div>
-          ) : (
-            <div
-              className="flex h-[300px] items-center justify-center rounded-3xl md:h-[480px]"
-              style={{ backgroundColor: colorWithOpacity(theme.secondaryColor, 0.5) }}
-            >
-              <p className="text-6xl font-serif opacity-20" style={{ color: theme.accentColor }}>
-                “
-              </p>
-            </div>
-          )}
+                </div>
+              </div>
+            ) : (
+              <div
+                className="flex h-[320px] items-center justify-center rounded-3xl md:h-[600px]"
+                style={{ backgroundColor: colorWithOpacity(theme.secondaryColor, 0.5) }}
+              >
+                <p className="text-6xl font-serif opacity-20" style={{ color: theme.accentColor }}>
+                  “
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </SectionWrapper>
 

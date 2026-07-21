@@ -232,6 +232,7 @@ model LocationPage {
   state     String        @default("NJ")
   slug      String
   content   String?
+  imageUrl  String?
   createdAt DateTime      @default(now())
 
   @@unique([siteId, slug])

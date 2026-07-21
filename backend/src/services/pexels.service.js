@@ -92,6 +92,56 @@ export async function fetchPexelsImage(businessName, category, city, options = {
 }
 
 /**
+ * @param {string} query - raw Pexels search query
+ * @param {object} [options]
+ * @param {string[]} [options.excludeUrls]
+ * @returns {Promise<string|null>}
+ */
+export async function fetchPexelsImageByQuery(query, options = {}) {
+  const headers = pexelsHeaders();
+  const normalizedQuery = String(query ?? '').trim();
+  if (!headers || !normalizedQuery) {
+    return null;
+  }
+
+  const exclude = new Set((options.excludeUrls ?? []).filter(Boolean));
+  const page = Math.floor(Math.random() * 5) + 1;
+
+  try {
+    const response = await axios.get(PEXELS_PHOTO_SEARCH, {
+      headers,
+      params: { query: normalizedQuery, per_page: 15, orientation: 'landscape', page },
+      validateStatus: () => true,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(response.data?.error ?? `HTTP ${response.status}`);
+    }
+
+    const photos = (response.data?.photos ?? [])
+      .map((p) => p?.src?.large2x ?? p?.src?.large ?? null)
+      .filter((url) => url && !exclude.has(url));
+
+    const url = pickRandom(photos);
+    if (!url) {
+      console.warn(JSON.stringify({ event: 'pexels_image_empty', query: normalizedQuery }));
+      return null;
+    }
+
+    return url;
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: 'pexels_image_by_query_failed',
+        query: normalizedQuery,
+        error: e?.message ?? String(e),
+      }),
+    );
+    return null;
+  }
+}
+
+/**
  * @returns {Promise<string|null>} video file link URL
  */
 export async function fetchPexelsVideo(businessName, category, city) {

@@ -41,4 +41,5 @@ export type LocationPage = {
   state: string;
   slug: string;
   content: string | null;
+  imageUrl: string | null;
 };

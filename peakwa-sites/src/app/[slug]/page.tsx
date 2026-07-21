@@ -178,17 +178,6 @@ const processSteps = [
   },
 ];
 
-function getLocationCardImage(
-  images: Awaited<ReturnType<typeof getSiteImages>>,
-  index: number,
-): string | null {
-  if (images.services[index % Math.max(images.services.length, 1)]) {
-    return images.services[index % images.services.length] ?? null;
-  }
-  if (index % 2 === 0 && images.hero) return images.hero;
-  if (images.about) return images.about;
-  return images.hero;
-}
 
 function getLocationExcerpt(content: string | null | undefined): string {
   if (!content) return '';
@@ -228,11 +217,6 @@ export default async function HomePage({ params }: PageProps) {
   const testimonials = buildTestimonials(site.businessName, site.city, site.industry);
   const trustBadges = buildTrustBadges(site.city);
   const faqs = buildFaqs(site.businessName, site.city, site.state, site.industry, site.phone);
-
-  const areaText = getTextColor(theme.primaryColor);
-  const areaTextIsLight = areaText === '#FFFFFF';
-  const areaMuted = areaTextIsLight ? 'rgba(255,255,255,0.85)' : 'rgba(17,24,39,0.75)';
-  const areaPillBase = areaTextIsLight ? '#FFFFFF' : theme.primaryColor;
 
   const stats = [
     {
@@ -367,65 +351,91 @@ export default async function HomePage({ params }: PageProps) {
         </div>
       </SectionWrapper>
 
-      <SectionWrapper
-        background="#fff"
-        className="py-20 md:py-24"
-        style={{ borderTop: `4px solid ${theme.accentColor}` }}
-      >
+      <SectionWrapper background={theme.secondaryColor} className="py-20 md:py-28">
         <div className="mx-auto max-w-6xl">
-          {images.about ? (
-            <div className="relative h-[220px] w-full overflow-hidden rounded-2xl shadow-md sm:h-[260px] md:h-[300px]">
-              <SiteImage
-                src={images.about}
-                alt={`About ${site.businessName}`}
-                fill
-                className="object-cover object-center"
-                sizes="100vw"
-                fallback={
-                  <div
-                    className="h-full w-full"
-                    style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
-                  />
-                }
-              />
+          <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-20">
+            <div className="order-2 lg:order-1">
+              <h2 className="text-3xl font-bold leading-tight text-gray-900 md:text-4xl">
+                {about.heading || `About ${site.businessName}`}
+              </h2>
               <div
-                className="absolute inset-0"
-                style={{
-                  background: `linear-gradient(to top, ${colorWithOpacity(theme.primaryColor, 0.55)}, transparent 55%)`,
-                }}
+                className="mt-5 h-1 w-14 rounded-full"
+                style={{ backgroundColor: theme.accentColor }}
               />
-            </div>
-          ) : (
-            <div
-              className="relative h-[220px] w-full overflow-hidden rounded-2xl sm:h-[260px] md:h-[300px]"
-              style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.12) }}
-            />
-          )}
-
-          <div className="mt-10 md:mt-12">
-            <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
-              {about.heading || 'About Us'}
-            </h2>
-            <div
-              className="my-5 h-1 w-14 rounded-full"
-              style={{ backgroundColor: theme.accentColor }}
-            />
-            <div className="grid gap-8 md:grid-cols-2 md:gap-10">
-              <p className="text-base leading-7 text-gray-600 md:text-[17px] md:leading-8">
+              <p className="mt-8 text-base leading-8 text-gray-600 md:text-lg md:leading-8">
                 {about.paragraph1 || site.description}
               </p>
-              <p className="text-base leading-7 text-gray-600 md:text-[17px] md:leading-8">
-                {about.paragraph2 || `Proudly serving ${site.city} and nearby communities.`}
-              </p>
+
+              {/* <ul className="mt-8 space-y-3">
+                {trustBadges.slice(0, 3).map((badge) => (
+                  <li key={badge.title} className="flex items-start gap-3">
+                    <span className="mt-0.5 shrink-0" style={{ color: theme.accentColor }}>
+                      {getIcon(badge.icon, 'w-5 h-5')}
+                    </span>
+                    <span className="text-sm font-medium text-gray-700 md:text-base">
+                      {badge.title}
+                    </span>
+                  </li>
+                ))}
+              </ul> */}
+
+              <Link
+                href={`/${slug}/about`}
+                className="mt-10 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold shadow-md transition hover:opacity-90"
+                style={{
+                  backgroundColor: theme.primaryColor,
+                  color: getTextColor(theme.primaryColor),
+                }}
+              >
+                Read Our Full Story
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <div className="order-1 lg:order-2 lg:pt-2">
+              <div className="relative mx-auto w-full max-w-md lg:ml-auto lg:max-w-none">
+                <div
+                  className="absolute -bottom-4 -left-4 h-full w-full rounded-2xl"
+                  style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.25) }}
+                  aria-hidden
+                />
+                <div className="relative aspect-[5/4] overflow-hidden rounded-2xl shadow-xl">
+                  {images.about ? (
+                    <SiteImage
+                      src={images.about}
+                      alt={`About ${site.businessName}`}
+                      fill
+                      className="object-cover object-center"
+                      sizes="(max-width: 1024px) 90vw, 45vw"
+                      fallback={
+                        <div
+                          className="h-full w-full"
+                          style={{ backgroundColor: colorWithOpacity(theme.primaryColor, 0.12) }}
+                        />
+                      }
+                    />
+                  ) : (
+                    <div
+                      className="h-full w-full"
+                      style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.12) }}
+                    />
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </SectionWrapper>
 
-      <SectionWrapper background={theme.secondaryColor} className="py-20">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Our Services</h2>
-        </div>
+      <SectionWrapper background="#fff" className="py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-12 text-center">
+            <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">Our Services</h2>
+            <div
+              className="mx-auto mt-4 h-1 w-14 rounded-full"
+              style={{ backgroundColor: theme.accentColor }}
+            />
+          </div>
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {homeServices.map((service, i) => {
             const serviceSlug = slugifyService(service.title || `service-${i}`);
@@ -490,6 +500,7 @@ export default async function HomePage({ params }: PageProps) {
           >
             View All Services <ArrowRight className="h-4 w-4" />
           </Link>
+        </div>
         </div>
       </SectionWrapper>
 
@@ -606,29 +617,36 @@ export default async function HomePage({ params }: PageProps) {
         </div>
       </SectionWrapper>
 
-      <SectionWrapper background={theme.primaryColor} className="py-20">
-        <div className="mx-auto max-w-6xl" style={{ color: areaText }}>
-          <div className="text-center">
-            <h2 className="text-3xl font-bold">
+      <SectionWrapper background={theme.secondaryColor} className="py-20 md:py-28">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-12 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-xl">
+              <p
+                className="text-sm font-semibold uppercase tracking-widest"
+                style={{ color: theme.accentColor }}
+              >
+                Service Areas
+              </p>
+              <h2 className="mt-3 text-3xl font-bold text-gray-900 md:text-4xl">
+                {locations.length > 0
+                  ? `Areas We Serve Near ${site.city}`
+                  : `Serving ${site.city} and Surrounding Areas`}
+              </h2>
+              <div
+                className="mt-5 h-1 w-16 rounded-full"
+                style={{ backgroundColor: theme.accentColor }}
+              />
+            </div>
+            <p className="max-w-lg text-base leading-relaxed text-gray-600 lg:text-right">
               {locations.length > 0
-                ? `Areas We Serve Near ${site.city}`
-                : `Serving ${site.city} and Surrounding Areas`}
-            </h2>
-            <div
-              className="mx-auto mt-4 h-1 w-16 rounded-full"
-              style={{ backgroundColor: theme.accentColor }}
-            />
-            <p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed" style={{ color: areaMuted }}>
-              {locations.length > 0
-                ? `${site.businessName} provides trusted ${site.industry} services across ${site.city}, ${site.state} and these nearby communities. Select your area to learn about local services, neighborhoods we cover, and why neighbors choose us.`
-                : `${site.businessName} is proud to serve ${site.city}, ${site.state} and the surrounding communities. As a local ${site.industry} provider, we understand the needs of our neighbors and are committed to reliable, friendly service right in your backyard.`}
+                ? `${site.businessName} proudly serves ${site.city} and neighboring communities across ${site.state}. Choose your area to see local services and coverage details.`
+                : `${site.businessName} is proud to serve ${site.city}, ${site.state} and the surrounding communities.`}
             </p>
           </div>
 
           {locations.length > 0 ? (
-            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {locations.map((location, index) => {
-                const cardImage = getLocationCardImage(images, index);
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {locations.map((location) => {
                 const excerpt =
                   getLocationExcerpt(location.content) ||
                   `${site.industry} services in ${location.city}, ${location.state}`;
@@ -637,55 +655,56 @@ export default async function HomePage({ params }: PageProps) {
                   <Link
                     key={location.id}
                     href={`/${slug}/${location.slug}`}
-                    className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-lg transition duration-300 hover:-translate-y-1 hover:shadow-xl"
-                    style={{ borderTop: `4px solid ${theme.accentColor}` }}
+                    className="group overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
                   >
-                    <div className="relative h-[200px] w-full overflow-hidden">
-                      {cardImage ? (
+                    <div className="relative aspect-[16/10] w-full overflow-hidden">
+                      {location.imageUrl ? (
                         <SiteImage
-                          src={cardImage}
-                          alt={`${site.businessName} serving ${location.city}, ${location.state}`}
+                          src={location.imageUrl}
+                          alt={`${site.businessName} in ${location.city}`}
                           fill
-                          className="object-cover transition duration-300 group-hover:scale-105"
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover transition duration-500 group-hover:scale-105"
+                          sizes="(max-width: 640px) 100vw, 33vw"
                           fallback={
                             <div
                               className="flex h-full items-center justify-center"
-                              style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                              style={{
+                                backgroundColor: colorWithOpacity(theme.accentColor, 0.1),
+                              }}
                             >
-                              <MapPin className="h-10 w-10" style={{ color: theme.accentColor }} />
+                              <MapPin className="h-8 w-8" style={{ color: theme.accentColor }} />
                             </div>
                           }
                         />
                       ) : (
                         <div
                           className="flex h-full items-center justify-center"
-                          style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.15) }}
+                          style={{ backgroundColor: colorWithOpacity(theme.accentColor, 0.1) }}
                         >
-                          <MapPin className="h-10 w-10" style={{ color: theme.accentColor }} />
+                          <MapPin className="h-8 w-8" style={{ color: theme.accentColor }} />
                         </div>
                       )}
                       <div
-                        className="absolute inset-0"
+                        className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100"
                         style={{
-                          background: `linear-gradient(to top, ${colorWithOpacity(theme.primaryColor, 0.75)}, transparent)`,
+                          background: `linear-gradient(to top, ${colorWithOpacity(theme.primaryColor, 0.65)}, transparent 60%)`,
                         }}
                       />
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <p className="text-lg font-bold text-white">{location.city}</p>
-                        <p className="text-sm text-white/85">
-                          {location.county} County, {location.state}
-                        </p>
-                      </div>
                     </div>
-                    <div className="flex flex-1 flex-col p-6">
-                      <p className="flex-1 text-sm leading-relaxed text-gray-600">{excerpt}</p>
+                    <div className="p-5">
+                      <h3 className="text-xl font-bold text-gray-900 group-hover:underline">
+                        {location.city}
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">{location.state}</p>
+                      <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-gray-600">
+                        {excerpt}
+                      </p>
                       <span
-                        className="mt-5 inline-flex items-center gap-2 text-sm font-semibold"
+                        className="mt-4 inline-flex items-center gap-2 text-sm font-semibold transition group-hover:gap-3"
                         style={{ color: theme.accentColor }}
                       >
-                        View {location.city} Services{' '}
-                        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+                        Explore {location.city}
+                        <ArrowRight className="h-4 w-4" />
                       </span>
                     </div>
                   </Link>
@@ -693,16 +712,11 @@ export default async function HomePage({ params }: PageProps) {
               })}
             </div>
           ) : (
-            <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <div className="flex flex-wrap gap-3">
               {nearbyAreas.map((area) => (
                 <span
                   key={area}
-                  className="rounded-full border px-4 py-2 text-sm font-medium"
-                  style={{
-                    borderColor: colorWithOpacity(areaPillBase, 0.3),
-                    backgroundColor: colorWithOpacity(areaPillBase, 0.12),
-                    color: areaText,
-                  }}
+                  className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700"
                 >
                   {area}
                 </span>
